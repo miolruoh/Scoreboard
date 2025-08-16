@@ -396,7 +396,8 @@ function resetTimer(){
   state.timer.running   = false;
   state.timer.elapsedMs = 0;
   updateTimerDisplay();
-  qs('#timerNotice')?.textContent='';
+  const noticeEl = qs('#timerNotice');
+  if (noticeEl) noticeEl.textContent = '';
 }
 
 // --- Kokonaispisteet ---
