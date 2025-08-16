@@ -1,145 +1,124 @@
 <!DOCTYPE html>
 <html lang="fi">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Pistepeli – Asetukset ja kirjaus</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Pistelaskuri</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <div class="app">
-    <header>
-      <div class="brand">
-        <div class="logo" aria-hidden="true"></div>
-        <div>
-          <h1>Pistepeli</h1>
-          <div class="subtitle">Asetukset • Kirjaus • Tulokset</div>
+
+  <!-- Etusivu -->
+  <section id="homeView" class="view">
+    <div class="intro">
+      <h1>Pistelaskuri</h1>
+      <p>Tervetuloa! Aloita painamalla alla olevaa nappia.</p>
+      <button id="homeStartBtn" class="primary">Aloita</button>
+    </div>
+  </section>
+
+  <!-- Yläpalkki -->
+  <header hidden>
+    <nav class="topnav">
+      <button data-view="settingsView" class="primary">Asetukset</button>
+      <button data-view="eventsView"   class="primary">Tapahtumat</button>
+      <button data-view="timerView"    class="primary">Sekuntikello</button>
+      <button data-view="totalsView"   class="primary">Kokonaispisteet</button>
+    </nav>
+  </header>
+
+  <main>
+    <!-- ASETUKSET -->
+    <section id="settingsView" class="view" hidden>
+      <h1>Asetukset</h1>
+
+      <div class="panel">
+        <h2>Pelaajat</h2>
+        <div id="playersList" class="list"></div>
+        <div class="row">
+          <input type="text" id="newPlayerName" name="newPlayerName" placeholder="Uusi pelaaja" />
+          <button id="addPlayerBtn" class="ghost">Lisää pelaaja</button>
         </div>
       </div>
-      <div class="toolbar">
-        <button id="toSetup" class="btn btn-ghost" style="display:none">Avaa asetukset</button>
+
+      <div class="panel">
+        <h2>Tapahtumat</h2>
+        <div id="eventNamesList" class="list"></div>
+        <div class="row">
+          <input type="text" id="newEventName" name="newEventName" placeholder="Uusi tapahtuma" />
+          <button id="addEventBtn" class="ghost">Lisää tapahtuma</button>
+        </div>
       </div>
-    </header>
 
-    <main class="views">
-      <!-- ASETUKSET -->
-      <section id="setupView" class="view active">
-        <div class="grid">
-          <div class="card col-6">
-            <h2>Pelaajat</h2>
-            <div class="hint">Lisää vähintään kaksi pelaajaa.</div>
-            <div class="row">
-              <div class="field">
-                <label for="playerName">Pelaajan nimi</label>
-                <input id="playerName" type="text" placeholder="Esim. Miikka" />
-              </div>
-              <div class="field" style="min-width:140px;flex:0">
-                <label>&nbsp;</label>
-                <button id="addPlayer" class="btn btn-secondary" type="button">Lisää pelaaja</button>
-              </div>
-            </div>
-            <div id="playersList" class="list"></div>
-          </div>
+      <div class="actions">
+        <button id="goToEventsBtn" class="primary">Aloita</button>
+        <button id="resetBtn" class="ghost">Takaisin</button>
+      </div>
+    </section>
 
-          <div class="card col-6">
-            <h2>Sijoituspisteet</h2>
-            <div class="hint">Määritä pisteet sijoituksille (1. sija, 2. sija, …).</div>
-            <div id="placementsList" class="list"></div>
-            <div class="toolbar" style="margin-top:8px">
-              <button id="addPlacementRow" class="btn btn-ghost" type="button">Lisää sijoitus</button>
-              <button id="resetDefaultPlacements" class="btn btn-ghost" type="button">Palauta oletus</button>
-            </div>
-          </div>
-
-          <div class="card col-4">
-            <h2>Tapahtumien määrä</h2>
-            <div class="field">
-              <label for="eventsCount">Kierrosten/matsien lukumäärä</label>
-              <input id="eventsCount" type="number" min="1" step="1" value="5" />
-            </div>
-          </div>
-
-          <div class="card col-8">
-            <h2>Aloitus</h2>
-            <div class="hint">Kun pelaajat ja pisteet ovat kunnossa, aloita peli.</div>
-            <div class="toolbar">
-              <button id="startGame" class="btn btn-primary" type="button">Aloita peli</button>
-            </div>
-          </div>
+    <!-- TAPAHTUMAT -->
+    <section id="eventsView" class="view" hidden>
+      <div class="events-header">
+        <h1 id="eventTitle">Tapahtuma</h1>
+        <div class="event-nav">
+          <button id="prevEventBtn" class="ghost">← Edellinen</button>
+          <button id="nextEventBtn" class="ghost">Seuraava →</button>
         </div>
-      </section>
+      </div>
 
-      <!-- PELI -->
-      <section id="gameView" class="view">
-        <div class="grid">
-          <div class="card col-12">
-            <h2>Kirjaa tapahtuma</h2>
-            <div class="row">
-              <div class="field">
-                <label for="eventSelect">Tapahtuma</label>
-                <select id="eventSelect"></select>
-              </div>
-              <div class="field">
-                <label for="playerSelect">Pelaaja</label>
-                <select id="playerSelect"></select>
-              </div>
-              <div class="field">
-                <label for="placementSelect">Sijoitus (valinnainen)</label>
-                <select id="placementSelect">
-                  <option value="">— Ei sijoitusta —</option>
-                </select>
-              </div>
-              <div class="field">
-                <label for="pointsInput">Pisteet (jos ei sijoitusta)</label>
-                <input id="pointsInput" type="number" step="1" placeholder="Esim. 10" />
-              </div>
-            </div>
-            <div class="toolbar" style="margin-top:8px">
-              <button id="saveEvent" class="btn btn-secondary" type="button">Tallenna tapahtuma</button>
-              <button id="undoEvent" class="btn btn-ghost" type="button">Kumoa viimeisin</button>
-            </div>
-          </div>
-
-          <div class="card col-7">
-            <h2>Kirjatut tapahtumat</h2>
-            <table class="table">
-              <thead>
-                <tr>
-                  <th>#</th>
-                  <th>Tapahtuma</th>
-                  <th>Pelaaja</th>
-                  <th>Sijoitus</th>
-                  <th>Pisteet</th>
-                </tr>
-              </thead>
-              <tbody id="eventsTableBody"></tbody>
-            </table>
-          </div>
-
-          <div class="card col-5">
-            <h2>Tulostaulukko</h2>
-            <div class="hint">Pelaajat järjestetty pisteiden mukaan.</div>
-            <table class="table">
-              <thead>
-                <tr>
-                  <th>Sijoitus</th>
-                  <th>Pelaaja</th>
-                  <th>Pisteet</th>
-                </tr>
-              </thead>
-              <tbody id="leaderboardBody"></tbody>
-            </table>
-          </div>
+      <div class="controls">
+        <div class="row">
+          <label for="orderSelect"><strong>Järjestys:</strong></label>
+          <select id="orderSelect" name="orderSelect">
+            <option value="desc">Laskeva (suurempi parempi)</option>
+            <option value="asc">Nouseva (pienempi parempi)</option>
+          </select>
         </div>
-      </section>
-    </main>
+      </div>
 
-    <footer>
-      <div>Vinkki: käytä sijoitusta tai suoria pisteitä jokaiselle tapahtumalle.</div>
-      <div id="status" aria-live="polite"></div>
-    </footer>
-  </div>
+      <div id="eventInputs" class="grid"></div>
 
+      <div class="actions">
+        <button id="saveEventBtn" class="primary">Laske ja tallenna tapahtuma</button>
+        <span id="eventStatus" class="status"></span>
+      </div>
+    </section>
+
+    <!-- SEKUNTIKELLO -->
+    <section id="timerView" class="view" hidden>
+      <h1>Sekuntikello</h1>
+      <div class="panel timer">
+        <div id="timerDisplay" class="timer-display">00.00.000</div>
+        <div class="row">
+          <button id="startTimerBtn" class="primary">Start</button>
+          <button id="stopTimerBtn"  class="primary">Stop</button>
+          <button id="resetTimerBtn" class="ghost">Reset</button>
+        </div>
+        <div class="row">
+          <label for="timerEventSelect"><strong>Tapahtuma:</strong></label>
+          <select id="timerEventSelect" name="timerEventSelect"></select>
+        </div>
+        <div class="row">
+          <label for="timerPlayerSelect"><strong>Pelaaja:</strong></label>
+          <select id="timerPlayerSelect" name="timerPlayerSelect"></select>
+        </div>
+        <div id="timerNotice" class="status"></div>
+      </div>
+    </section>
+
+    <!-- KOKONAISPISTEET -->
+    <section id="totalsView" class="view" hidden>
+      <h1>Kokonaispisteet</h1>
+      <table class="table">
+        <thead>
+          <tr><th>Pelaaja</th><th>Pisteet</th></tr>
+        </thead>
+        <tbody id="leaderboardBodyTotals"></tbody>
+      </table>
+    </section>
+  </main>
+
+  <footer></footer>
   <script src="script.js"></script>
 </body>
 </html>
