@@ -10,9 +10,7 @@
   --border: #2a2f3a;
 }
 
-* {
-  box-sizing: border-box;
-}
+* { box-sizing: border-box; }
 
 html, body {
   margin: 0;
@@ -23,12 +21,8 @@ html, body {
   line-height: 1.4;
 }
 
-.view {
-  display: none;
-}
-.view:not([hidden]) {
-  display: block;
-}
+.view { display: none; }
+.view:not([hidden]) { display: block; }
 
 .intro {
   max-width: 400px;
@@ -53,12 +47,12 @@ header {
 .topnav button {
   flex: 1;
   padding: .75rem;
-  border: none;
   background: transparent;
   color: var(--text);
-  cursor: pointer;
+  border: none;
   border-radius: .5rem;
   min-width: 100px;
+  cursor: pointer;
 }
 .topnav button:hover,
 .topnav button:focus {
@@ -101,9 +95,7 @@ h2 { margin: 0 0 .5rem; font-size: 1.125rem; }
   background: #141822;
 }
 
-.item .name {
-  flex: 1;
-}
+.item .name { flex: 1; }
 
 .ghost {
   background: transparent;
@@ -124,13 +116,9 @@ h2 { margin: 0 0 .5rem; font-size: 1.125rem; }
 }
 
 .primary:hover,
-.primary:focus {
-  background: var(--primary-600);
-}
+.primary:focus { background: var(--primary-600); }
 
-button {
-  font-weight: 600;
-}
+button { font-weight: 600; }
 
 button:disabled {
   opacity: .5;
@@ -180,9 +168,7 @@ input[readonly] {
   gap: .5rem;
 }
 
-.controls {
-  margin: .5rem 0 1rem;
-}
+.controls { margin: .5rem 0 1rem; }
 
 .grid {
   display: grid;
@@ -191,9 +177,7 @@ input[readonly] {
   align-items: center;
 }
 
-.grid label {
-  color: var(--muted);
-}
+.grid label { color: var(--muted); }
 
 .grid .locktag,
 .grid .pointtag {
@@ -219,9 +203,7 @@ input[readonly] {
   flex-wrap: wrap;
 }
 
-.status {
-  color: var(--muted);
-}
+.status { color: var(--muted); }
 
 .table {
   width: 100%;
@@ -242,6 +224,11 @@ input[readonly] {
 .table tbody tr:hover {
   background: #141822;
 }
+
+/* Korostukset vain, kun kaikki tallennettu */
+.gold { background-color: rgba(255, 215, 0, 0.3); }
+.silver { background-color: rgba(192, 192, 192, 0.3); }
+.bronze { background-color: rgba(205, 127, 50, 0.3); }
 
 .timer {
   display: flex;

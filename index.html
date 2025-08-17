@@ -8,7 +8,7 @@
 </head>
 <body>
 
-  <!-- Etusivu -->
+  <!-- KOTINÄKYMÄ -->
   <section id="homeView" class="view">
     <div class="intro">
       <h1>Pistelaskuri</h1>
@@ -17,13 +17,13 @@
     </div>
   </section>
 
-  <!-- Yläpalkki -->
-  <header hidden>
+  <!-- YLÄPALKKI -->
+  <header id="mainHeader" hidden>
     <nav class="topnav">
       <button data-view="settingsView" class="primary">Asetukset</button>
-      <button data-view="eventsView"   class="primary">Tapahtumat</button>
-      <button data-view="timerView"    class="primary">Sekuntikello</button>
-      <button data-view="totalsView"   class="primary">Kokonaispisteet</button>
+      <button data-view="eventsView"   class="primary" disabled>Tapahtumat</button>
+      <button data-view="timerView"    class="primary" disabled>Sekuntikello</button>
+      <button data-view="totalsView"   class="primary" disabled>Kokonaispisteet</button>
     </nav>
   </header>
 
@@ -36,8 +36,8 @@
         <h2>Pelaajat</h2>
         <div id="playersList" class="list"></div>
         <div class="row">
-          <input type="text" id="newPlayerName" name="newPlayerName" placeholder="Uusi pelaaja" />
-          <button id="addPlayerBtn" class="ghost">Lisää pelaaja</button>
+          <input type="text" id="newPlayerName" placeholder="Uusi pelaaja" />
+          <button id="addPlayerBtn" class="ghost">Lisää</button>
         </div>
       </div>
 
@@ -45,8 +45,8 @@
         <h2>Tapahtumat</h2>
         <div id="eventNamesList" class="list"></div>
         <div class="row">
-          <input type="text" id="newEventName" name="newEventName" placeholder="Uusi tapahtuma" />
-          <button id="addEventBtn" class="ghost">Lisää tapahtuma</button>
+          <input type="text" id="newEventName" placeholder="Uusi tapahtuma" />
+          <button id="addEventBtn" class="ghost">Lisää</button>
         </div>
       </div>
 
@@ -69,7 +69,7 @@
       <div class="controls">
         <div class="row">
           <label for="orderSelect"><strong>Järjestys:</strong></label>
-          <select id="orderSelect" name="orderSelect">
+          <select id="orderSelect">
             <option value="desc">Laskeva (suurempi parempi)</option>
             <option value="asc">Nouseva (pienempi parempi)</option>
           </select>
@@ -79,7 +79,7 @@
       <div id="eventInputs" class="grid"></div>
 
       <div class="actions">
-        <button id="saveEventBtn" class="primary">Laske ja tallenna tapahtuma</button>
+        <button id="saveEventBtn" class="primary">Tallenna tulokset</button>
         <span id="eventStatus" class="status"></span>
       </div>
     </section>
@@ -88,7 +88,7 @@
     <section id="timerView" class="view" hidden>
       <h1>Sekuntikello</h1>
       <div class="panel timer">
-        <div id="timerDisplay" class="timer-display">00.00.000</div>
+        <div id="timerDisplay" class="timer-display">00.000</div>
         <div class="row">
           <button id="startTimerBtn" class="primary">Start</button>
           <button id="stopTimerBtn"  class="primary">Stop</button>
@@ -96,11 +96,11 @@
         </div>
         <div class="row">
           <label for="timerEventSelect"><strong>Tapahtuma:</strong></label>
-          <select id="timerEventSelect" name="timerEventSelect"></select>
+          <select id="timerEventSelect"></select>
         </div>
         <div class="row">
           <label for="timerPlayerSelect"><strong>Pelaaja:</strong></label>
-          <select id="timerPlayerSelect" name="timerPlayerSelect"></select>
+          <select id="timerPlayerSelect"></select>
         </div>
         <div id="timerNotice" class="status"></div>
       </div>
@@ -118,7 +118,9 @@
     </section>
   </main>
 
-  <footer></footer>
+  <!-- Toast-viestit -->
+  <div id="toast" hidden></div>
+
   <script src="script.js"></script>
 </body>
 </html>
