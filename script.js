@@ -9,49 +9,75 @@ const state = {
   started: false
 };
 
-// --- Apurit ---
-const qs  = (sel, root = document) => root.querySelector(sel);
-const qsa = (sel, root = document) => Array.from(root.querySelectorAll(sel));
-const pad2 = n => String(n).padStart(2, '0');
-const pad3 = n => String(n).padStart(3, '0');
+// --- Persistointi ---
+function saveState() {
+  localStorage.setItem('pistelaskuri', JSON.stringify({
+    players: state.players,
+    totals: state.totals,
+    placementPoints: state.placementPoints,
+    events: state.events,
+    currentEventIndex: state.currentEventIndex,
+    started: state.started
+  }));
+}
 
-function showToast(msg, type = '') {
-  const el = qs('#toast');
-  if (!el) return;
-  el.textContent = msg;
-  el.className = `toast ${type}`;
-  el.hidden = false;
-  setTimeout(() => el.hidden = true, 2200);
+function loadState() {
+  const raw = localStorage.getItem('pistelaskuri');
+  if (!raw) return;
+  try {
+    const obj = JSON.parse(raw);
+    state.players           = obj.players           || [];
+    state.totals            = obj.totals            || {};
+    state.placementPoints   = obj.placementPoints   || [];
+    state.events            = obj.events            || [];
+    state.currentEventIndex = obj.currentEventIndex || 0;
+    state.started           = obj.started           || false;
+  } catch {
+    // tyhjä jos virhe
+  }
+}
+
+// --- Apurit ---
+const qs  = (s, r=document) => r.querySelector(s);
+const qsa = (s, r=document) => Array.from(r.querySelectorAll(s));
+const pad2 = n => String(n).padStart(2,'0');
+const pad3 = n => String(n).padStart(3,'0');
+
+function showToast(msg, type='') {
+  const t = qs('#toast');
+  t.textContent = msg;
+  t.className = `toast ${type}`;
+  t.hidden = false;
+  setTimeout(()=> t.hidden = true, 2200);
 }
 
 function isTimeFormat(v)    { return /^\d{1,2}\.\d{2}\.\d{1,3}$/.test(v.trim()); }
 function isIntegerStr(v)    { return /^-?\d+$/.test(v.trim()); }
 function timeToMs(str) {
-  const [m, s, ms] = str.split('.').map(x => parseInt(x, 10));
-  return (m || 0) * 60000 + (s || 0) * 1000 + (ms || 0);
+  const [m,s,ms] = str.split('.').map(x=>parseInt(x,10));
+  return (m||0)*60000 + (s||0)*1000 + (ms||0);
 }
 function msToDisplay(ms) {
-  const m     = Math.floor(ms / 60000);
-  const s     = Math.floor((ms % 60000) / 1000);
-  const milli = ms % 1000;
-  return `${pad2(m)}.${pad2(s)}.${pad3(milli)}`;
+  const m = Math.floor(ms/60000);
+  const s = Math.floor((ms%60000)/1000);
+  const mi = ms % 1000;
+  return `${pad2(m)}.${pad2(s)}.${pad3(mi)}`;
 }
 
-function updatePlacementPoints() {
+// --- Tilankäsittely ja synkronointi ---
+function updatePlacementPoints(){
   const n = state.players.length;
-  state.placementPoints = Array.from({ length: n }, (_, i) => n - i);
+  state.placementPoints = Array.from({length:n}, (_,i)=>n - i);
 }
 
-function ensureTotalsForPlayers() {
-  state.players.forEach(p => {
-    if (!(p in state.totals)) state.totals[p] = 0;
-  });
-  Object.keys(state.totals).forEach(p => {
+function ensureTotalsForPlayers(){
+  state.players.forEach(p=> { if (!(p in state.totals)) state.totals[p] = 0; });
+  Object.keys(state.totals).forEach(p=> {
     if (!state.players.includes(p)) delete state.totals[p];
   });
 }
 
-function syncEventsPlayers() {
+function syncEventsPlayers(){
   state.events.forEach(ev => {
     state.players.forEach(p => {
       if (!(p in ev.results)) ev.results[p] = '';
@@ -70,17 +96,65 @@ function currentEvent() {
   return state.events[state.currentEventIndex];
 }
 
+// --- UI Helpers ---
+function resetAll() {
+  state.players           = [];
+  state.events            = [];
+  state.totals            = {};
+  state.currentEventIndex = 0;
+  state.started           = false;
+  clearInterval(state.timer.intervalId);
+  state.timer.running     = false;
+  state.timer.elapsedMs   = 0;
+
+  ensureTotalsForPlayers();
+  updatePlacementPoints();
+  syncEventsPlayers();
+
+  // lukitaan lisäysnapit
+  qs('#addPlayerBtn').disabled   = false;
+  qs('#newPlayerName').disabled  = false;
+  qs('#addEventBtn').disabled    = false;
+  qs('#newEventName').disabled   = false;
+
+  renderSettings();
+  renderTotals();
+  qsa('header .topnav button').forEach(b=> {
+    if (b.id === 'endGameBtn') return;
+    b.disabled = true
+  });
+  qs('#mainHeader').hidden = true;
+  switchView('homeView');
+  saveState();
+}
+
 // --- Alustus ---
 document.addEventListener('DOMContentLoaded', () => {
-  qs('#homeStartBtn')?.addEventListener('click', () => {
+  loadState();
+
+  // jos jatketaan tallennetusta
+  if (state.started) {
+    qs('#mainHeader').hidden = false;
+    // lukitaan lisäysnapit
+    qs('#addPlayerBtn').disabled   = true;
+    qs('#newPlayerName').disabled  = true;
+    qs('#addEventBtn').disabled    = true;
+    qs('#newEventName').disabled   = true;
+    qsa('header .topnav button').forEach(b => b.disabled = false);
+  }
+
+  // HOME–nappi
+  qs('#homeStartBtn').addEventListener('click', () => {
     qs('#mainHeader').hidden = false;
     switchView('settingsView');
   });
 
+  // NAV
   qsa('header .topnav button').forEach(btn => {
-    btn.disabled = true;
+    const v = btn.dataset.view;
+    if (v && v !== 'settingsView') btn.disabled = !state.started;
     btn.addEventListener('click', () => {
-      const v = btn.dataset.view;
+      if (btn.id === 'endGameBtn') return;  // oma käsittelijä alla
       if (v === 'eventsView') {
         renderEventsHeader();
         renderEventInputs();
@@ -93,100 +167,95 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  qs('#addPlayerBtn')?.addEventListener('click', addPlayer);
-  qs('#newPlayerName')?.addEventListener('keypress', e => {
+  // PELIN LOPETUS
+  qs('#endGameBtn').addEventListener('click', () => {
+    qs('#confirmOverlay').hidden = false;
+  });
+  qs('#confirmYes').addEventListener('click', () => {
+    qs('#confirmOverlay').hidden = true;
+    localStorage.removeItem('pistelaskuri');
+    resetAll();
+  });
+  qs('#confirmNo').addEventListener('click', () => {
+    qs('#confirmOverlay').hidden = true;
+  });
+
+  // ASETUKSET
+  qs('#addPlayerBtn').addEventListener('click', addPlayer);
+  qs('#newPlayerName').addEventListener('keypress', e => {
     if (e.key === 'Enter') addPlayer();
   });
-  qs('#addEventBtn')?.addEventListener('click', addEvent);
-  qs('#newEventName')?.addEventListener('keypress', e => {
+  qs('#addEventBtn').addEventListener('click', addEvent);
+  qs('#newEventName').addEventListener('keypress', e => {
     if (e.key === 'Enter') addEvent();
   });
 
-  qs('#goToEventsBtn')?.addEventListener('click', () => {
+  qs('#goToEventsBtn').addEventListener('click', () => {
     if (!state.players.length || !state.events.length) {
       showToast('Lisää vähintään yksi pelaaja ja yksi tapahtuma', 'error');
       return;
     }
-
     state.started = true;
+    ensureTotalsForPlayers();
+    updatePlacementPoints();
+    syncEventsPlayers();
 
-    // estetään lisäämislomakkeet
+    // lukitaan lisäysnapit
     qs('#addPlayerBtn').disabled   = true;
     qs('#newPlayerName').disabled  = true;
     qs('#addEventBtn').disabled    = true;
     qs('#newEventName').disabled   = true;
-    qs('#goToEventsBtn').disabled  = true;
 
-    ensureTotalsForPlayers();
-    updatePlacementPoints();
-    syncEventsPlayers();
+    qsa('header .topnav button').forEach(b => b.disabled = false);
 
     renderSettings();
     renderEventsHeader();
     renderEventInputs();
     renderTimerSelectors();
-
-    qsa('header .topnav button').forEach(b => b.disabled = false);
+    saveState();
     switchView('eventsView');
   });
 
-  qs('#resetBtn')?.addEventListener('click', () => {
-    state.players           = [];
-    state.events            = [];
-    state.totals            = {};
-    state.currentEventIndex = 0;
-    state.started           = false;
-    clearInterval(state.timer.intervalId);
-    state.timer.running     = false;
-    state.timer.elapsedMs   = 0;
-
-    ensureTotalsForPlayers();
-    updatePlacementPoints();
-    syncEventsPlayers();
-
-    qs('#addPlayerBtn').disabled   = false;
-    qs('#newPlayerName').disabled  = false;
-    qs('#addEventBtn').disabled    = false;
-    qs('#newEventName').disabled   = false;
-    qs('#goToEventsBtn').disabled  = false;
-
-    renderSettings();
-    renderTotals();
-
-    qsa('header .topnav button').forEach(b => b.disabled = true);
-    qs('#mainHeader').hidden = true;
-    switchView('homeView');
-  });
-
-  qs('#prevEventBtn')?.addEventListener('click', () => jumpEvent(-1));
-  qs('#nextEventBtn')?.addEventListener('click', () => jumpEvent(1));
-  qs('#orderSelect')?.addEventListener('change', () => {
+  // TAPAHTUMAT-NAV
+  qs('#prevEventBtn').addEventListener('click', () => jumpEvent(-1));
+  qs('#nextEventBtn').addEventListener('click', () => jumpEvent(1));
+  qs('#orderSelect').addEventListener('change', () => {
     currentEvent().order = qs('#orderSelect').value;
     renderEventInputs();
+    saveState();
   });
-  qs('#saveEventBtn')?.addEventListener('click', () => {
-    saveCurrentEvent();
-  });
-  qs('#eventInputs')?.addEventListener('focusout', e => {
+  qs('#saveEventBtn').addEventListener('click', saveCurrentEvent);
+
+  // tallennetaan käsin syötetyt arvot heti focusoutissa
+  qs('#eventInputs').addEventListener('focusout', e => {
     if (!e.target.matches('input')) return;
     const ev = currentEvent(), p = e.target.dataset.player, v = e.target.value.trim();
     if (ev.locks[p]) {
       e.target.value = ev.results[p] || '';
-      showToast('Kenttä jo lukittu','error');
+      showToast('Kenttä jo lukittu', 'error');
     } else {
       ev.results[p] = v;
+      saveState();
     }
     renderEventInputs();
   });
 
-  qs('#startTimerBtn')?.addEventListener('click', startTimer);
-  qs('#stopTimerBtn')?.addEventListener('click', stopTimer);
-  qs('#resetTimerBtn')?.addEventListener('click', resetTimer);
-  qs('#timerEventSelect')?.addEventListener('change', resetTimer);
-  qs('#timerPlayerSelect')?.addEventListener('change', resetTimer);
+  // SEKUNTIKELLO
+  qs('#startTimerBtn').addEventListener('click',   startTimer);
+  qs('#stopTimerBtn').addEventListener('click',    stopTimer);
+  qs('#resetTimerBtn').addEventListener('click',   resetTimer);
+  qs('#timerEventSelect').addEventListener('change', resetTimer);
+  qs('#timerPlayerSelect').addEventListener('change', resetTimer);
 
   renderSettings();
-  switchView('homeView');
+  renderTotals();
+
+  // Aloitettu jo aikaisemmin?
+  if (state.started) {
+    switchView('eventsView');
+  } else {
+    switchView('homeView');
+  }
 });
 
 function switchView(viewId) {
@@ -209,6 +278,7 @@ function addPlayer() {
   updatePlacementPoints();
   syncEventsPlayers();
   renderSettings();
+  saveState();
 }
 
 function removePlayer(name) {
@@ -219,29 +289,32 @@ function removePlayer(name) {
   syncEventsPlayers();
   renderSettings();
   renderTotals();
+  saveState();
 }
 
 function addEvent() {
   const val = qs('#newEventName').value.trim() || `Tapahtuma ${state.events.length+1}`;
   state.events.push({
     name: val,
-    results:Object.fromEntries(state.players.map(p=>[p,''])),
-    locks:  Object.fromEntries(state.players.map(p=>[p,false])),
-    order:  'desc',
+    results: Object.fromEntries(state.players.map(p=>[p,''])),
+    locks:   Object.fromEntries(state.players.map(p=>[p,false])),
+    order:   'desc',
     committed:false,
-    points:{}
+    points: {}
   });
   qs('#newEventName').value = '';
   renderSettings();
+  saveState();
 }
 
 function renameEvent(i) {
   const old = state.events[i]?.name || `Tapahtuma ${i+1}`;
-  const nu  = prompt('Uusi nimi:',old);
-  if(nu) {
+  const nu  = prompt('Uusi nimi:', old);
+  if (nu) {
     state.events[i].name = nu.trim();
     renderSettings();
     renderEventsHeader();
+    saveState();
   }
 }
 
@@ -250,52 +323,60 @@ function deleteEvent(i) {
   state.currentEventIndex = Math.min(state.currentEventIndex, state.events.length-1);
   renderSettings();
   renderEventsHeader();
+  saveState();
 }
 
 function renderSettings(){
   const disableEdit = state.started;
+  const disableOpen = !state.started;
+
   // Pelaajat
   const pl = qs('#playersList');
-  if(pl){
-    pl.innerHTML = '';
-    state.players.forEach(p=>{
-      const d=document.createElement('div'); d.className='item';
-      d.innerHTML = `<span class="name">${p}</span>
-        <button class="ghost" data-action="remove">Poista</button>`;
-      const btn = d.querySelector('[data-action="remove"]');
-      btn.disabled = disableEdit;
-      btn.addEventListener('click',()=>removePlayer(p));
-      pl.append(d);
-    });
-  }
+  pl.innerHTML = '';
+  state.players.forEach(p=>{
+    const d=document.createElement('div'); d.className='item';
+    d.innerHTML = `<span class="name">${p}</span>
+      <button class="ghost" data-action="remove">Poista</button>`;
+    const btn = d.querySelector('[data-action="remove"]');
+    btn.disabled = disableEdit;
+    btn.addEventListener('click',()=>removePlayer(p));
+    pl.append(d);
+  });
 
   // Tapahtumat
-  const evl=qs('#eventNamesList');
-  if(evl){
-    evl.innerHTML='';
-    state.events.forEach((ev,i)=>{
-      const d=document.createElement('div'); d.className='item';
-      const tag=ev.committed?'<span class="locktag">Tallennettu</span>':'';
-      d.innerHTML = `<button class="ghost" data-action="open">${ev.name}</button>
-        ${tag}<span style="flex:1"></span>
-        <button class="ghost" data-action="rename">Nimeä</button>
-        <button class="ghost" data-action="delete">Poista</button>`;
-      d.querySelector('[data-action="open"]')
-       .addEventListener('click', ()=>{
-         state.currentEventIndex = i;
-         renderEventsHeader();
-         renderEventInputs();
-         switchView('eventsView');
-       });
-      const rbtn = d.querySelector('[data-action="rename"]');
-      rbtn.disabled = disableEdit;
-      rbtn.addEventListener('click',()=>renameEvent(i));
-      const dbtn = d.querySelector('[data-action="delete"]');
-      dbtn.disabled = disableEdit;
-      dbtn.addEventListener('click',()=>deleteEvent(i));
-      evl.append(d);
+  const evl = qs('#eventNamesList');
+  evl.innerHTML = '';
+  state.events.forEach((ev,i)=>{
+    const d=document.createElement('div'); d.className='item';
+    d.innerHTML = `
+      <button class="ghost event-name" data-action="open">${ev.name}</button>
+      <div class="event-actions">
+        <button class="ghost" data-action="rename">Nimeä uudelleen</button>
+        <button class="ghost" data-action="delete">Poista</button>
+      </div>
+    `;
+
+    // Avaa-painike (kiinni ennen aloitusta)
+    const openBtn = d.querySelector('[data-action="open"]');
+    openBtn.disabled = disableOpen;
+    openBtn.addEventListener('click', ()=>{
+      if (!state.started) return;
+      state.currentEventIndex = i;
+      renderEventsHeader();
+      renderEventInputs();
+      switchView('eventsView');
     });
-  }
+
+    const rbtn = d.querySelector('[data-action="rename"]');
+    rbtn.disabled = disableEdit;
+    rbtn.addEventListener('click',()=>renameEvent(i));
+
+    const dbtn = d.querySelector('[data-action="delete"]');
+    dbtn.disabled = disableEdit;
+    dbtn.addEventListener('click',()=>deleteEvent(i));
+
+    evl.append(d);
+  });
 }
 
 // --- TAPAHTUMAT ---
@@ -306,8 +387,6 @@ function renderEventsHeader(){
   const nextBtn   = qs('#nextEventBtn');
   const orderSel  = qs('#orderSelect');
   const ev        = currentEvent();
-
-  if (!title || !saveBtn || !prevBtn || !nextBtn || !orderSel) return;
 
   if (!state.events.length){
     title.textContent = 'Ei tapahtumia';
@@ -322,170 +401,199 @@ function renderEventsHeader(){
   title.textContent = ev.name;
   prevBtn.disabled  = state.currentEventIndex === 0;
   nextBtn.disabled  = state.currentEventIndex >= state.events.length - 1;
-
-  // lukitaan "Tallenna tulokset" vain, jos tämä tapahtuma on jo tallennettu
   saveBtn.disabled  = ev.committed;
   orderSel.disabled = ev.committed;
   qs('#eventStatus').textContent = ev.committed ? 'Tallennettu' : '';
 }
 
 function jumpEvent(delta){
-  if(!state.events.length) return;
+  if (!state.events.length) return;
   state.currentEventIndex = Math.max(0,
     Math.min(state.events.length-1, state.currentEventIndex+delta)
   );
   renderEventsHeader();
   renderEventInputs();
+  saveState();
 }
 
 function renderEventInputs(){
-  const c=qs('#eventInputs');
-  if(!c) return;
-  c.innerHTML='';
-  const ev=currentEvent();
-  if(!ev){
-    c.innerHTML='<p class="hint">Lisää tapahtumia.</p>';
+  const c = qs('#eventInputs');
+  c.innerHTML = '';
+  const ev = currentEvent();
+  if (!ev) {
+    c.innerHTML = '<p class="hint">Lisää tapahtumia.</p>';
     return;
   }
-  const sorted=[...state.players].sort((a,b)=>{
-    const ra=ev.results[a]||'', rb=ev.results[b]||'';
-    const ha=ra!=='', hb=rb!=='';
+
+  const sorted = [...state.players].sort((a,b)=>{
+    const ra = ev.results[a]||'', rb = ev.results[b]||'';
+    const ha = ra!=='', hb = rb!=='';
     if(!ha&&!hb) return 0;
     if(!ha) return 1;
     if(!hb) return -1;
-    const va=isTimeFormat(ra)?timeToMs(ra):parseInt(ra,10);
-    const vb=isTimeFormat(rb)?timeToMs(rb):parseInt(rb,10);
+    const va = isTimeFormat(ra)?timeToMs(ra):parseInt(ra,10);
+    const vb = isTimeFormat(rb)?timeToMs(rb):parseInt(rb,10);
     return ev.order==='asc'?va-vb:vb-va;
   });
+
   updatePlacementPoints();
+
   sorted.forEach(p=>{
-    const rid=`evt${state.currentEventIndex}_${p.replace(/\s+/g,'_')}`;
-    const lbl=document.createElement('label');
+    const rid = `evt${state.currentEventIndex}_${p.replace(/\s+/g,'_')}`;
+    const lbl = document.createElement('label');
     lbl.setAttribute('for',rid);
-    lbl.textContent=p;
-    const wrap=document.createElement('div');
-    const inp=document.createElement('input');
-    inp.type='text'; inp.id=rid; inp.name=rid;
-    inp.placeholder='mm.ss.mmm tai luku';
-    inp.value=ev.results[p]||''; inp.readOnly=!!ev.locks[p];
-    inp.dataset.player=p;
-    const lockTag=document.createElement('span');
-    lockTag.className='locktag'; lockTag.textContent='Lukittu';
-    lockTag.style.display=ev.locks[p]?'inline-block':'none';
-    const pt=document.createElement('span');
-    pt.className='pointtag';
-    if(ev.committed && p in ev.points){
-      pt.textContent=`+${ev.points[p]}`; pt.style.display='inline-block';
-    } else pt.style.display='none';
-    wrap.append(inp,lockTag,pt);
-    c.append(lbl,wrap);
+    lbl.textContent = p;
+
+    const wrap = document.createElement('div');
+    wrap.className = 'wrap';
+    const inp  = document.createElement('input');
+    inp.type        = 'text';
+    inp.id          = rid;
+    inp.name        = rid;
+    inp.placeholder = 'mm.ss.mmm tai luku';
+    inp.value       = ev.results[p] || '';
+    inp.readOnly    = !!ev.locks[p];
+    inp.dataset.player = p;
+
+    const lockTag = document.createElement('span');
+    lockTag.className = 'locktag';
+    lockTag.textContent = 'Lukittu';
+    lockTag.style.display = ev.locks[p] ? 'inline-block' : 'none';
+
+    const pt = document.createElement('span');
+    pt.className = 'pointtag';
+    if (ev.committed && p in ev.points) {
+      pt.textContent = `+${ev.points[p]}`;
+      pt.style.display = 'inline-block';
+    } else {
+      pt.style.display = 'none';
+    }
+
+    wrap.append(inp, lockTag, pt);
+    c.append(lbl, wrap);
   });
 }
 
 function saveCurrentEvent(){
   const ev = currentEvent();
   if (!ev || ev.committed) {
-    if (ev?.committed) showToast('Tapahtuma on jo tallennettu', 'error');
+    if (ev?.committed) showToast('Tapahtuma on jo tallennettu','error');
     return;
   }
-  const vals=state.players.map(p=>(ev.results[p]||'').trim());
-  if(vals.some(v=>!v||'0123456789'.indexOf(v[0])<0)){
-    showToast('Kelvottomat arvot','error'); return;
+
+  const vals = state.players.map(p=>(ev.results[p]||'').trim());
+  if (vals.some(v=>!v||'0123456789'.indexOf(v[0])<0)) {
+    showToast('Kelvottomat arvot','error');
+    return;
   }
-  const types=vals.map(v=>isTimeFormat(v)?'time':isIntegerStr(v)?'int':'invalid');
-  if(types.includes('invalid')){
-    showToast('Muoto väärä','error'); return;
+
+  const types = vals.map(v=>isTimeFormat(v)?'time':isIntegerStr(v)?'int':'invalid');
+  if (types.includes('invalid')) {
+    showToast('Muoto väärä','error');
+    return;
   }
-  if(new Set(types).size>1){
-    showToast('Yhtenäinen muoto','error'); return;
+  if (new Set(types).size > 1) {
+    showToast('Ei yhtenäinen muoto','error');
+    return;
   }
-  const isTime=types[0]==='time', dir=ev.order==='asc'?1:-1;
-  const rows=state.players.map(p=>({
-    p, score:isTime?timeToMs(ev.results[p]):parseInt(ev.results[p],10)
-  })).sort((a,b)=>(a.score-b.score)*dir);
+
+  const isTime = types[0] === 'time';
+  const dir    = ev.order === 'asc' ? 1 : -1;
+  const rows   = state.players.map(p=>({
+    p,
+    score: isTime? timeToMs(ev.results[p]): parseInt(ev.results[p],10)
+  })).sort((a,b)=>(a.score - b.score)*dir);
+
   updatePlacementPoints();
-  rows.forEach((r, i) => {
-    ev.points[r.p]      = state.placementPoints[i];
-    state.totals[r.p]  += state.placementPoints[i];
+  rows.forEach((r,i)=>{
+    ev.points[r.p]     = state.placementPoints[i];
+    state.totals[r.p] += state.placementPoints[i];
   });
-  ev.committed=true;
+  ev.committed = true;
+
   renderEventsHeader();
   renderEventInputs();
   renderTotals();
+  saveState();
   showToast('Tallennettu','success');
 }
 
 function renderTotals(){
-  const tb=qs('#leaderboardBodyTotals');
-  if(!tb) return;
+  const tb = qs('#leaderboardBodyTotals');
+  tb.innerHTML = '';
   ensureTotalsForPlayers();
-  tb.innerHTML='';
   const allDone = state.events.length > 0 && state.events.every(e=>e.committed);
-  const sorted=Object.entries(state.totals).sort((a,b)=>b[1]-a[1]);
-  sorted.forEach(([p,pts],i)=>{
-    const tr=document.createElement('tr');
-    if(allDone){
-      if(i===0) tr.classList.add('gold');
-      else if(i===1) tr.classList.add('silver');
-      else if(i===2) tr.classList.add('bronze');
+  const sorted = Object.entries(state.totals).sort((a,b)=>b[1]-a[1]);
+
+  sorted.forEach(([p,pts], i)=>{
+    const tr = document.createElement('tr');
+    if (allDone) {
+      if (i===0) tr.classList.add('gold');
+      else if (i===1) tr.classList.add('silver');
+      else if (i===2) tr.classList.add('bronze');
     }
-    tr.innerHTML=`<td>${p}</td><td>${pts}</td>`;
+    tr.innerHTML = `<td>${p}</td><td>${pts}</td>`;
     tb.append(tr);
   });
 }
 
-// Sekuntikello
+// --- Sekuntikello ---
 function renderTimerSelectors(){
-  const evSel=qs('#timerEventSelect'),
-        plSel=qs('#timerPlayerSelect');
-  if(evSel){
-    evSel.innerHTML='';
-    state.events.forEach((ev,i)=>evSel.append(new Option(ev.name,i)));
-    evSel.value=state.currentEventIndex;
-  }
-  if(plSel){
-    plSel.innerHTML='';
-    state.players.forEach(p=>plSel.append(new Option(p,p)));
-  }
+  const evSel = qs('#timerEventSelect'),
+        plSel = qs('#timerPlayerSelect');
+  evSel.innerHTML = '';
+  state.events.forEach((ev,i)=> evSel.append(new Option(ev.name,i)));
+  evSel.value = state.currentEventIndex;
+
+  plSel.innerHTML = '';
+  state.players.forEach(p => plSel.append(new Option(p,p)));
 }
 
 function updateTimerDisplay(){
-  qs('#timerDisplay').textContent=msToDisplay(state.timer.elapsedMs);
+  qs('#timerDisplay').textContent = msToDisplay(state.timer.elapsedMs);
 }
 
 function startTimer(){
-  if(state.timer.running) return;
-  state.timer.running=true;
-  state.timer.startTs=performance.now()-state.timer.elapsedMs;
-  state.timer.intervalId=setInterval(()=>{
-    state.timer.elapsedMs=Math.floor(performance.now()-state.timer.startTs);
+  if (state.timer.running) return;
+  state.timer.running = true;
+  state.timer.startTs = performance.now() - state.timer.elapsedMs;
+  state.timer.intervalId = setInterval(()=>{
+    state.timer.elapsedMs = Math.floor(performance.now() - state.timer.startTs);
     updateTimerDisplay();
-  },16);
+  }, 16);
 }
 
 function stopTimer(){
-  if(!state.timer.running) return;
+  if (!state.timer.running) return;
   clearInterval(state.timer.intervalId);
-  state.timer.running=false;
-  const eIdx=parseInt(qs('#timerEventSelect').value,10),
-        pl=qs('#timerPlayerSelect').value;
-  if(isNaN(eIdx)||!state.events[eIdx]){
-    qs('#timerNotice').textContent='Valitse tapahtuma'; return;
+  state.timer.running = false;
+
+  const eIdx = parseInt(qs('#timerEventSelect').value, 10),
+        pl   = qs('#timerPlayerSelect').value;
+  if (isNaN(eIdx) || !state.events[eIdx]) {
+    qs('#timerNotice').textContent = 'Valitse tapahtuma';
+    return;
   }
-  if(!pl){
-    qs('#timerNotice').textContent='Valitse pelaaja'; return;
+  if (!pl) {
+    qs('#timerNotice').textContent = 'Valitse pelaaja';
+    return;
   }
-  const t=msToDisplay(state.timer.elapsedMs),
-        ev=state.events[eIdx];
-  ev.results[pl]=t; ev.locks[pl]=true;
+
+  const t  = msToDisplay(state.timer.elapsedMs),
+        ev = state.events[eIdx];
+  ev.results[pl] = t;
+  ev.locks[pl]   = true;
+
   renderEventInputs();
-  qs('#timerNotice').textContent=`${pl}: ${t}`;
+  qs('#timerNotice').textContent = `${pl}: ${t}`;
+  saveState();
   showToast('Aika tallennettu','success');
 }
 
 function resetTimer(){
   clearInterval(state.timer.intervalId);
-  state.timer.running=false; state.timer.elapsedMs=0;
+  state.timer.running   = false;
+  state.timer.elapsedMs = 0;
   updateTimerDisplay();
-  qs('#timerNotice').textContent='';
+  qs('#timerNotice').textContent = '';
 }

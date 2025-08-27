@@ -25,6 +25,7 @@
       <button data-view="eventsView"   class="primary" disabled>Tapahtumat</button>
       <button data-view="timerView"    class="primary" disabled>Sekuntikello</button>
       <button data-view="totalsView"   class="primary" disabled>Kokonaispisteet</button>
+      <button id="endGameBtn" class="danger small">Lopeta peli</button>
     </nav>
   </header>
 
@@ -53,7 +54,6 @@
 
       <div class="actions">
         <button id="goToEventsBtn" class="primary">Aloita</button>
-        <button id="resetBtn" class="ghost">Takaisin</button>
       </div>
     </section>
 
@@ -90,7 +90,7 @@
       <h1>Sekuntikello</h1>
       <div class="panel timer">
         <div id="timerDisplay" class="timer-display">00.000</div>
-        <div class="row">
+        <div class="rowButtons">
           <button id="startTimerBtn" class="primary">Start</button>
           <button id="stopTimerBtn"  class="primary">Stop</button>
           <button id="resetTimerBtn" class="ghost">Reset</button>
@@ -121,6 +121,17 @@
 
   <!-- Toast-viestit -->
   <div id="toast" hidden></div>
+
+  <!-- Lopeta peli -kysely -->
+  <div id="confirmOverlay" hidden>
+    <div class="confirmBox">
+      <p>Oletko varma, että haluat lopettaa pelin?</p>
+      <div class="row">
+        <button id="confirmYes" class="danger">Kyllä</button>
+        <button id="confirmNo"  class="ghost">Ei</button>
+      </div>
+    </div>
+  </div>
 
   <script src="script.js"></script>
 </body>
