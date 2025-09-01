@@ -13,8 +13,11 @@
   <section id="homeView" class="view">
     <div class="intro">
       <h1>Pistelaskuri</h1>
-      <p>Tervetuloa! Aloita painamalla alla olevaa nappia.</p>
-      <button id="homeStartBtn" class="primary">Aloita</button>
+      <p>Anna pelin nimi:</p>
+      <input type="text" id="gameNameInput" placeholder="Pelin nimi" />
+
+      <button id="homeNewBtn"  class="primary">Aloita uusi peli</button>
+      <button id="homeLoadBtn" class="ghost">Lataa peli</button>
     </div>
   </section>
 
@@ -54,7 +57,6 @@
 
       <div class="actions">
         <button id="goToEventsBtn" class="primary">Aloita</button>
-        <button id="loadHashBtn" class="ghost">Lataa peli</button>
       </div>
     </section>
 
@@ -133,6 +135,23 @@
       </div>
     </div>
   </div>
+
+  <!-- Firestore SDK (compat) -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+  <script>
+    // Korvaa omilla arvoillasi Firebase Consolesta
+    const firebaseConfig = {
+        apiKey: "AIzaSyDpntEY5iTfSU10pxXBvgjbjNRDFI3ZUlM",
+        authDomain: "sturdy-dragon-470812-d0.firebaseapp.com",
+        projectId: "sturdy-dragon-470812-d0",
+        storageBucket: "sturdy-dragon-470812-d0.firebasestorage.app",
+        messagingSenderId: "394864264450",
+        appId: "1:394864264450:web:33f8f6293b998b18b7ae1b"
+    };
+    firebase.initializeApp(firebaseConfig);
+    window.db = firebase.firestore();
+  </script>
 
   <script src="script.js"></script>
 </body>

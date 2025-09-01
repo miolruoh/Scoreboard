@@ -9,69 +9,12 @@ const state = {
   started: false
 };
 
-// --- Persistointi ---
-function saveState() {
-  const payload = {
-    players:           state.players,
-    totals:            state.totals,
-    placementPoints:   state.placementPoints,
-    events:            state.events,
-    currentEventIndex: state.currentEventIndex,
-    started:           state.started
-  };
-
-  const raw = JSON.stringify(payload);
-  // 1) Tallennus localStorageen
-  localStorage.setItem('pistelaskuri', raw);
-
-  // 2) Automaattinen “vienti” URL-hashiin base64-muodossa
-  //    => selaimen osoiteriville ilmestyy #<base64(json)>
-  try {
-    const b64 = btoa(raw);
-    window.location.hash = b64;
-  } catch(e) {
-    console.warn('Hash-päivitys epäonnistui:', e);
-  }
-}
-
-// Lisäät loadStateen hash-tuonnin, jos localStorage on tyhjä
-function loadState() {
-  let raw = localStorage.getItem('pistelaskuri');
-
-  // jos ei löytynyt, katsotaan onko hashissa tallennettu
-  if (!raw && window.location.hash.length > 1) {
-    try {
-      const b64  = window.location.hash.slice(1);
-      raw = atob(b64);
-      // validoidaan että on kelvollinen JSON
-      JSON.parse(raw);
-      // laitetaan localStorageen, niin muutkin funktiot löytävät sen
-      localStorage.setItem('pistelaskuri', raw);
-      // Voit myös tyhjentää hashin, jos et halua näyttää sitä osoiterivillä:
-      window.history.replaceState(null,null, window.location.pathname);
-      console.info('Status ladattu hashista');
-    } catch(e) {
-      console.error('Hashista lataus epäonnistui:', e);
-    }
-  }
-
-  if (!raw) return;
-  try {
-    const obj = JSON.parse(raw);
-    state.players           = obj.players           || [];
-    state.totals            = obj.totals            || {};
-    state.placementPoints   = obj.placementPoints   || [];
-    state.events            = obj.events            || [];
-    state.currentEventIndex = obj.currentEventIndex || 0;
-    state.started           = obj.started           || false;
-  } catch {
-    // tyhjä jos virhe
-  }
-}
+// Dokumentin ID Firestoreen
+let gameName = '';
 
 // --- Apurit ---
-const qs  = (s, r=document) => r.querySelector(s);
-const qsa = (s, r=document) => Array.from(r.querySelectorAll(s));
+const qs  = (s,r=document) => r.querySelector(s);
+const qsa = (s,r=document) => Array.from(r.querySelectorAll(s));
 const pad2 = n => String(n).padStart(2,'0');
 const pad3 = n => String(n).padStart(3,'0');
 
@@ -80,18 +23,18 @@ function showToast(msg, type='') {
   t.textContent = msg;
   t.className = `toast ${type}`;
   t.hidden = false;
-  setTimeout(()=> t.hidden = true, 2200);
+  setTimeout(() => t.hidden = true, 2200);
 }
 
-function isTimeFormat(v)    { return /^\d{1,2}\.\d{2}\.\d{1,3}$/.test(v.trim()); }
-function isIntegerStr(v)    { return /^-?\d+$/.test(v.trim()); }
+function isTimeFormat(v) { return /^\d{1,2}\.\d{2}\.\d{1,3}$/.test(v.trim()); }
+function isIntegerStr(v) { return /^-?\d+$/.test(v.trim()); }
 function timeToMs(str) {
   const [m,s,ms] = str.split('.').map(x=>parseInt(x,10));
   return (m||0)*60000 + (s||0)*1000 + (ms||0);
 }
 function msToDisplay(ms) {
-  const m = Math.floor(ms/60000);
-  const s = Math.floor((ms%60000)/1000);
+  const m  = Math.floor(ms/60000);
+  const s  = Math.floor((ms%60000)/1000);
   const mi = ms % 1000;
   return `${pad2(m)}.${pad2(s)}.${pad3(mi)}`;
 }
@@ -103,19 +46,19 @@ function updatePlacementPoints(){
 }
 
 function ensureTotalsForPlayers(){
-  state.players.forEach(p=> { if (!(p in state.totals)) state.totals[p] = 0; });
-  Object.keys(state.totals).forEach(p=> {
+  state.players.forEach(p=>{ if (!(p in state.totals)) state.totals[p] = 0; });
+  Object.keys(state.totals).forEach(p=>{
     if (!state.players.includes(p)) delete state.totals[p];
   });
 }
 
 function syncEventsPlayers(){
-  state.events.forEach(ev => {
-    state.players.forEach(p => {
+  state.events.forEach(ev=>{
+    state.players.forEach(p=>{
       if (!(p in ev.results)) ev.results[p] = '';
       if (!(p in ev.locks))   ev.locks[p]   = false;
     });
-    Object.keys(ev.results).forEach(p => {
+    Object.keys(ev.results).forEach(p=>{
       if (!state.players.includes(p)) {
         delete ev.results[p];
         delete ev.locks[p];
@@ -126,6 +69,133 @@ function syncEventsPlayers(){
 
 function currentEvent() {
   return state.events[state.currentEventIndex];
+}
+
+// --- Firestore-erilliset funktiot ---
+
+// Aloita uusi peli: nimi ei saa olla varattuna Firestoressa
+async function startNewGame() {
+  const name = qs('#gameNameInput').value.trim();
+  if (!name) {
+    showToast('Anna pelin nimi','error');
+    return;
+  }
+
+  try {
+    const docSnap = await db.collection('games').doc(name).get();
+    if (docSnap.exists) {
+      showToast('Pelin nimi varattu','error');
+      return;
+    }
+  } catch (e) {
+    console.error(e);
+    showToast('Virhe Firestore-tarkistuksessa','error');
+    return;
+  }
+
+  gameName = name;
+
+  // Tyhjennä vanha localStorage ja state
+  localStorage.removeItem('pistelaskuri');
+  state.players = [];
+  state.totals  = {};
+  state.events  = [];
+  state.currentEventIndex = 0;
+  state.started = false;
+  clearInterval(state.timer.intervalId);
+  state.timer.running   = false;
+  state.timer.elapsedMs = 0;
+
+  ensureTotalsForPlayers();
+  updatePlacementPoints();
+  syncEventsPlayers();
+
+  // Näytä yläpalkki ja siirry Asetukset-näkymään
+  qs('#mainHeader').hidden = false;
+  renderSettings();
+  renderTotals();
+  switchView('settingsView');
+
+  showToast('Uusi peli aloitettu','success');
+}
+
+// Lataa olemassa oleva peli Firestoresta
+async function loadGame() {
+  const name = qs('#gameNameInput').value.trim();
+  if (!name) {
+    showToast('Anna pelin nimi','error');
+    return;
+  }
+  gameName = name;
+
+  try {
+    const docSnap = await db.collection('games').doc(name).get();
+    if (!docSnap.exists) {
+      showToast('Peliä ei löytynyt','error');
+      return;
+    }
+    // Aseta localStorage ja lue state
+    const data = docSnap.data();
+    localStorage.setItem('pistelaskuri', JSON.stringify(data));
+    loadState();
+    ensureTotalsForPlayers();
+    updatePlacementPoints();
+    syncEventsPlayers();
+
+    // Näytä yläpalkki ja siirry Tapahtumat-näkymään
+    qs('#mainHeader').hidden = false;
+    renderEventsHeader();
+    renderEventInputs();
+    renderTimerSelectors();
+    renderTotals();
+    switchView('eventsView');
+
+    showToast('Peli ladattu','success');
+  } catch (e) {
+    console.error(e);
+    showToast('Virhe latauksessa','error');
+  }
+}
+
+// --- Persistointi: localStorage + Firestore ---
+function saveState() {
+  const payload = {
+    players:           state.players,
+    totals:            state.totals,
+    placementPoints:   state.placementPoints,
+    events:            state.events,
+    currentEventIndex: state.currentEventIndex,
+    started:           state.started
+  };
+  const raw = JSON.stringify(payload);
+
+  // 1) Paikallinen tallennus
+  localStorage.setItem('pistelaskuri', raw);
+
+  // 2) Pilvitallennus, jos gameName on asetettu
+  if (gameName) {
+    db.collection('games').doc(gameName).set(payload)
+      .catch(e=>{
+        console.error('Firestore save error', e);
+        showToast('Virhe tallennuksessa','error');
+      });
+  }
+}
+
+function loadState() {
+  const raw = localStorage.getItem('pistelaskuri');
+  if (!raw) return;
+  try {
+    const obj = JSON.parse(raw);
+    state.players           = obj.players           || [];
+    state.totals            = obj.totals            || {};
+    state.placementPoints   = obj.placementPoints   || [];
+    state.events            = obj.events            || [];
+    state.currentEventIndex = obj.currentEventIndex || 0;
+    state.started           = obj.started           || false;
+  } catch {
+    // virheellinen JSON, ohitetaan
+  }
 }
 
 // --- UI Helpers ---
@@ -143,7 +213,6 @@ function resetAll() {
   updatePlacementPoints();
   syncEventsPlayers();
 
-  // lukitaan lisäysnapit
   qs('#addPlayerBtn').disabled   = false;
   qs('#newPlayerName').disabled  = false;
   qs('#addEventBtn').disabled    = false;
@@ -153,7 +222,7 @@ function resetAll() {
   renderTotals();
   qsa('header .topnav button').forEach(b=> {
     if (b.id === 'endGameBtn') return;
-    b.disabled = true
+    b.disabled = true;
   });
   qs('#mainHeader').hidden = true;
   switchView('homeView');
@@ -162,31 +231,19 @@ function resetAll() {
 
 // --- Alustus ---
 document.addEventListener('DOMContentLoaded', () => {
+  // Lataa mahdollinen localStorage-tila
   loadState();
 
-  // jos jatketaan tallennetusta
-  if (state.started) {
-    qs('#mainHeader').hidden = false;
-    // lukitaan lisäysnapit
-    qs('#addPlayerBtn').disabled   = true;
-    qs('#newPlayerName').disabled  = true;
-    qs('#addEventBtn').disabled    = true;
-    qs('#newEventName').disabled   = true;
-    qsa('header .topnav button').forEach(b => b.disabled = false);
-  }
-
-  // HOME–nappi
-  qs('#homeStartBtn').addEventListener('click', () => {
-    qs('#mainHeader').hidden = false;
-    switchView('settingsView');
-  });
+  // Koti-näkymän napit
+  qs('#homeNewBtn').addEventListener('click', startNewGame);
+  qs('#homeLoadBtn').addEventListener('click', loadGame);
 
   // NAV
   qsa('header .topnav button').forEach(btn => {
     const v = btn.dataset.view;
     if (v && v !== 'settingsView') btn.disabled = !state.started;
     btn.addEventListener('click', () => {
-      if (btn.id === 'endGameBtn') return;  // oma käsittelijä alla
+      if (btn.id === 'endGameBtn') return;
       if (v === 'eventsView') {
         renderEventsHeader();
         renderEventInputs();
@@ -200,27 +257,19 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // PELIN LOPETUS
-  qs('#endGameBtn').addEventListener('click', () => {
-    qs('#confirmOverlay').hidden = false;
-  });
+  qs('#endGameBtn').addEventListener('click', () => qs('#confirmOverlay').hidden = false);
   qs('#confirmYes').addEventListener('click', () => {
     qs('#confirmOverlay').hidden = true;
     localStorage.removeItem('pistelaskuri');
     resetAll();
   });
-  qs('#confirmNo').addEventListener('click', () => {
-    qs('#confirmOverlay').hidden = true;
-  });
+  qs('#confirmNo').addEventListener('click', () => qs('#confirmOverlay').hidden = true);
 
   // ASETUKSET
   qs('#addPlayerBtn').addEventListener('click', addPlayer);
-  qs('#newPlayerName').addEventListener('keypress', e => {
-    if (e.key === 'Enter') addPlayer();
-  });
+  qs('#newPlayerName').addEventListener('keypress', e => { if (e.key === 'Enter') addPlayer(); });
   qs('#addEventBtn').addEventListener('click', addEvent);
-  qs('#newEventName').addEventListener('keypress', e => {
-    if (e.key === 'Enter') addEvent();
-  });
+  qs('#newEventName').addEventListener('keypress', e => { if (e.key === 'Enter') addEvent(); });
 
   qs('#goToEventsBtn').addEventListener('click', () => {
     if (!state.players.length || !state.events.length) {
@@ -232,12 +281,10 @@ document.addEventListener('DOMContentLoaded', () => {
     updatePlacementPoints();
     syncEventsPlayers();
 
-    // lukitaan lisäysnapit
     qs('#addPlayerBtn').disabled   = true;
     qs('#newPlayerName').disabled  = true;
     qs('#addEventBtn').disabled    = true;
     qs('#newEventName').disabled   = true;
-
     qsa('header .topnav button').forEach(b => b.disabled = false);
 
     renderSettings();
@@ -246,30 +293,6 @@ document.addEventListener('DOMContentLoaded', () => {
     renderTimerSelectors();
     saveState();
     switchView('eventsView');
-  });
-
-  qs('#loadHashBtn').addEventListener('click', () => {
-    // uudelleenladataan tila joko hashista tai localStoragesta
-    loadState();
-    ensureTotalsForPlayers();
-    updatePlacementPoints();
-    syncEventsPlayers();
-  
-    renderSettings();
-    renderTotals();
-  
-    if (state.started) {
-      // jos pelikin on jo käynnissä, avaamme Events-näkymän
-      switchView('eventsView');
-      renderEventsHeader();
-      renderEventInputs();
-      renderTimerSelectors();
-    } else {
-      // muuten jäämme Settings-näkymään
-      switchView('settingsView');
-    }
-  
-    showToast('Peli ladattu', 'success');
   });
 
   // TAPAHTUMAT-NAV
@@ -282,7 +305,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   qs('#saveEventBtn').addEventListener('click', saveCurrentEvent);
 
-  // tallennetaan käsin syötetyt arvot heti focusoutissa
+  // Focusout-synkronointi
   qs('#eventInputs').addEventListener('focusout', e => {
     if (!e.target.matches('input')) return;
     const ev = currentEvent(), p = e.target.dataset.player, v = e.target.value.trim();
@@ -306,12 +329,8 @@ document.addEventListener('DOMContentLoaded', () => {
   renderSettings();
   renderTotals();
 
-  // Aloitettu jo aikaisemmin?
-  if (state.started) {
-    switchView('eventsView');
-  } else {
-    switchView('homeView');
-  }
+  if (state.started) switchView('eventsView');
+  else               switchView('homeView');
 });
 
 function switchView(viewId) {
