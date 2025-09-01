@@ -1,3 +1,18 @@
+// Import the functions you need from the SDKs you need
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
+import { getFirestore, doc, getDoc, setDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
+// Your web app's Firebase configuration
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+const firebaseConfig = {
+  apiKey: "AIzaSyDpntEY5iTfSU10pxXBvgjbjNRDFI3ZUlM",
+  authDomain: "sturdy-dragon-470812-d0.firebaseapp.com",
+  projectId: "sturdy-dragon-470812-d0",
+};
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+
 // --- Sovelluksen tila ---
 const state = {
   players: [],
