@@ -71,131 +71,157 @@ function currentEvent() {
   return state.events[state.currentEventIndex];
 }
 
-// --- Firestore-erilliset funktiot ---
-
-// Aloita uusi peli: nimi ei saa olla varattuna Firestoressa
-async function startNewGame() {
-  const name = qs('#gameNameInput').value.trim();
-  if (!name) {
-    showToast('Anna pelin nimi','error');
-    return;
-  }
-
+// --- Firestore-synk: tägää local ↔ pilvi
+async function syncWithFirestore(){
+  if(!gameName) return;
   try {
-    const docSnap = await db.collection('games').doc(name).get();
-    if (docSnap.exists) {
-      showToast('Pelin nimi varattu','error');
-      return;
+    const snap = await db.collection('games').doc(gameName).get();
+    if(!snap.exists) return;
+    const remote = JSON.stringify(snap.data());
+    const local  = localStorage.getItem('pistelaskuri')||'';
+    if(remote!==local){
+      localStorage.setItem('pistelaskuri',remote);
+      loadState();
+      // päivitä UI jos ollaan auki
+      if(state.started){
+        renderSettings();
+        renderEventsHeader();
+        renderEventInputs();
+        renderTimerSelectors();
+        renderTotals();
+      }
     }
-  } catch (e) {
-    console.error(e);
-    showToast('Virhe Firestore-tarkistuksessa','error');
-    return;
-  }
-
-  gameName = name;
-
-  // Tyhjennä vanha localStorage ja state
-  localStorage.removeItem('pistelaskuri');
-  state.players = [];
-  state.totals  = {};
-  state.events  = [];
-  state.currentEventIndex = 0;
-  state.started = false;
-  clearInterval(state.timer.intervalId);
-  state.timer.running   = false;
-  state.timer.elapsedMs = 0;
-
-  ensureTotalsForPlayers();
-  updatePlacementPoints();
-  syncEventsPlayers();
-
-  // Näytä yläpalkki ja siirry Asetukset-näkymään
-  qs('#mainHeader').hidden = false;
-  renderSettings();
-  renderTotals();
-  switchView('settingsView');
-
-  showToast('Uusi peli aloitettu','success');
-}
-
-// Lataa olemassa oleva peli Firestoresta
-async function loadGame() {
-  const name = qs('#gameNameInput').value.trim();
-  if (!name) {
-    showToast('Anna pelin nimi','error');
-    return;
-  }
-  gameName = name;
-
-  try {
-    const docSnap = await db.collection('games').doc(name).get();
-    if (!docSnap.exists) {
-      showToast('Peliä ei löytynyt','error');
-      return;
-    }
-    // Aseta localStorage ja lue state
-    const data = docSnap.data();
-    localStorage.setItem('pistelaskuri', JSON.stringify(data));
-    loadState();
-    ensureTotalsForPlayers();
-    updatePlacementPoints();
-    syncEventsPlayers();
-
-    // Näytä yläpalkki ja siirry Tapahtumat-näkymään
-    qs('#mainHeader').hidden = false;
-    renderEventsHeader();
-    renderEventInputs();
-    renderTimerSelectors();
-    renderTotals();
-    switchView('eventsView');
-
-    showToast('Peli ladattu','success');
-  } catch (e) {
-    console.error(e);
-    showToast('Virhe latauksessa','error');
+  } catch(e){
+    console.error('sync error',e);
   }
 }
 
 // --- Persistointi: localStorage + Firestore ---
-function saveState() {
-  const payload = {
-    players:           state.players,
-    totals:            state.totals,
-    placementPoints:   state.placementPoints,
-    events:            state.events,
-    currentEventIndex: state.currentEventIndex,
-    started:           state.started
+function saveState(){
+  const payload={
+    players:state.players, totals:state.totals,
+    placementPoints:state.placementPoints,
+    events:state.events,
+    currentEventIndex:state.currentEventIndex,
+    started:state.started
   };
-  const raw = JSON.stringify(payload);
+  const raw=JSON.stringify(payload);
+  localStorage.setItem('pistelaskuri',raw);
+  localStorage.setItem('pistelaskuriGameName',gameName);
 
-  // 1) Paikallinen tallennus
-  localStorage.setItem('pistelaskuri', raw);
-
-  // 2) Pilvitallennus, jos gameName on asetettu
-  if (gameName) {
+  if(gameName){
     db.collection('games').doc(gameName).set(payload)
       .catch(e=>{
-        console.error('Firestore save error', e);
+        console.error('save error',e);
         showToast('Virhe tallennuksessa','error');
       });
   }
 }
 
-function loadState() {
-  const raw = localStorage.getItem('pistelaskuri');
-  if (!raw) return;
+function loadState(){
+  const raw=localStorage.getItem('pistelaskuri');
+  if(!raw) return;
   try {
-    const obj = JSON.parse(raw);
-    state.players           = obj.players           || [];
-    state.totals            = obj.totals            || {};
-    state.placementPoints   = obj.placementPoints   || [];
-    state.events            = obj.events            || [];
-    state.currentEventIndex = obj.currentEventIndex || 0;
-    state.started           = obj.started           || false;
-  } catch {
-    // virheellinen JSON, ohitetaan
+    const obj=JSON.parse(raw);
+    state.players=obj.players||[];
+    state.totals=obj.totals||{};
+    state.placementPoints=obj.placementPoints||[];
+    state.events=obj.events||[];
+    state.currentEventIndex=obj.currentEventIndex||0;
+    state.started=obj.started||false;
+  } catch{}
+}
+
+// --- PELIN ALOITUS JA LOPETUS ---
+
+async function startNewGame(){
+  const name=qs('#gameNameInput').value.trim();
+  if(!name){ showToast('Anna pelin nimi','error'); return; }
+
+  // Estä varatut nimet
+  const snap=await db.collection('games').doc(name).get().catch(e=>{ 
+    console.error(e); showToast('Virhe tarkistuksessa','error');
+  });
+  if(snap?.exists){ showToast('Pelin nimi varattu','error'); return; }
+
+  // Poista vanha peli Firestonesta
+  if(gameName){
+    await db.collection('games').doc(gameName).delete().catch(e=>{
+      console.warn('delete old game error',e);
+    });
   }
+
+  // Nollaa localStorage ja tila
+  localStorage.removeItem('pistelaskuri');
+  localStorage.removeItem('pistelaskuriGameName');
+  gameName=name;
+  Object.assign(state,{
+    players:[], totals:{}, placementPoints:[],
+    events:[], currentEventIndex:0, started:false
+  });
+  clearInterval(state.timer.intervalId);
+  state.timer.running=false; state.timer.elapsedMs=0;
+
+  ensureTotalsForPlayers();
+  updatePlacementPoints();
+  syncEventsPlayers();
+
+  qs('#mainHeader').hidden=false;
+  renderSettings();
+  renderTotals();
+  switchView('settingsView');
+  showToast('Uusi peli aloitettu','success');
+}
+
+async function loadGame(){
+  const name=qs('#gameNameInput').value.trim();
+  if(!name){ showToast('Anna pelin nimi','error'); return; }
+  gameName=name;
+
+  const snap=await db.collection('games').doc(name).get().catch(e=>{
+    console.error(e); showToast('Virhe latauksessa','error');
+  });
+  if(!snap?.exists){ showToast('Peliä ei löytynyt','error'); return; }
+
+  // Päivitä localStoragesta
+  const data=snap.data();
+  localStorage.setItem('pistelaskuri',JSON.stringify(data));
+  localStorage.setItem('pistelaskuriGameName',gameName);
+  loadState();
+  ensureTotalsForPlayers();
+  updatePlacementPoints();
+  syncEventsPlayers();
+
+  // Kerro, että peli on nyt käynnissä
+  state.started = true;
+
+  // Näytä yläpalkki ja aktivoi nav-napit
+  qs('#mainHeader').hidden = false;
+  qsa('header .topnav button').forEach(b => {
+    if (b.id !== 'endGameBtn') b.disabled = false;
+  });
+
+  // Renderöinnit ja näkymään siirtyminen
+  renderEventsHeader();
+  renderEventInputs();
+  renderTimerSelectors();
+  renderTotals();
+  switchView('eventsView');
+  showToast('Peli ladattu','success');
+}
+
+// Lopeta peli: poista pilvestä ja localStoragesta
+async function endGame(){
+  if(gameName){
+    await db.collection('games').doc(gameName).delete().catch(e=>{
+      console.warn('delete error',e);
+    });
+  }
+  localStorage.removeItem('pistelaskuri');
+  localStorage.removeItem('pistelaskuriGameName');
+  // resetAll kutsuu saveState->ei haluta pilvitallennusta
+  gameName='';
+  resetAll();
 }
 
 // --- UI Helpers ---
@@ -229,64 +255,87 @@ function resetAll() {
   saveState();
 }
 
-// --- Alustus ---
-document.addEventListener('DOMContentLoaded', () => {
-  // Lataa mahdollinen localStorage-tila
+// --- Alustus ja event-sidonta ---
+
+document.addEventListener('DOMContentLoaded', async ()=>{
+  // Palauta gameName jos oli
+  const savedName=localStorage.getItem('pistelaskuriGameName');
+  if(savedName) gameName=savedName;
+
+  // Lataa localState, synkkaa pilven kanssa
+  loadState();
+  await syncWithFirestore();
   loadState();
 
-  // Koti-näkymän napit
+  if (state.started) {
+    qs('#mainHeader').hidden = false;
+
+    // Lukitaan lisäyspainikkeet
+    qs('#addPlayerBtn').disabled  = true;
+    qs('#newPlayerName').disabled = true;
+    qs('#addEventBtn').disabled   = true;
+    qs('#newEventName').disabled  = true;
+
+    // Aktivoi nav-napit (paitsi Lopeta-nappi, se on aina aktivoitu)
+    qsa('header .topnav button').forEach(b => {
+      if (b.id !== 'endGameBtn') b.disabled = false;
+    });
+
+    // Ja suoraan Events-näkymään
+    renderEventsHeader();
+    renderEventInputs();
+    renderTimerSelectors();
+    renderTotals();
+    switchView('eventsView');
+  } else {
+    switchView('homeView');
+  }
+
+  // KOTI-näkymän napit
   qs('#homeNewBtn').addEventListener('click', startNewGame);
   qs('#homeLoadBtn').addEventListener('click', loadGame);
 
   // NAV
-  qsa('header .topnav button').forEach(btn => {
-    const v = btn.dataset.view;
-    if (v && v !== 'settingsView') btn.disabled = !state.started;
-    btn.addEventListener('click', () => {
-      if (btn.id === 'endGameBtn') return;
-      if (v === 'eventsView') {
-        renderEventsHeader();
-        renderEventInputs();
-      } else if (v === 'timerView') {
-        renderTimerSelectors();
-      } else if (v === 'totalsView') {
-        renderTotals();
-      }
+  qsa('header .topnav button').forEach(btn=>{
+    const v=btn.dataset.view;
+    if(v && v!=='settingsView') btn.disabled=!state.started;
+    btn.addEventListener('click',()=>{
+      if(btn.id==='endGameBtn') return;
+      if(v==='eventsView'){ renderEventsHeader(); renderEventInputs(); }
+      else if(v==='timerView') renderTimerSelectors();
+      else if(v==='totalsView') renderTotals();
       switchView(v);
     });
   });
 
-  // PELIN LOPETUS
-  qs('#endGameBtn').addEventListener('click', () => qs('#confirmOverlay').hidden = false);
-  qs('#confirmYes').addEventListener('click', () => {
-    qs('#confirmOverlay').hidden = true;
-    localStorage.removeItem('pistelaskuri');
-    resetAll();
+  // PELIN LOPETUS-dialogi
+  qs('#endGameBtn').addEventListener('click',()=>qs('#confirmOverlay').hidden=false);
+  qs('#confirmYes').addEventListener('click',()=>{
+    qs('#confirmOverlay').hidden=true;
+    endGame();
   });
-  qs('#confirmNo').addEventListener('click', () => qs('#confirmOverlay').hidden = true);
+  qs('#confirmNo').addEventListener('click',()=>qs('#confirmOverlay').hidden=true);
 
   // ASETUKSET
   qs('#addPlayerBtn').addEventListener('click', addPlayer);
-  qs('#newPlayerName').addEventListener('keypress', e => { if (e.key === 'Enter') addPlayer(); });
+  qs('#newPlayerName').addEventListener('keypress', e=>{ if(e.key==='Enter') addPlayer(); });
   qs('#addEventBtn').addEventListener('click', addEvent);
-  qs('#newEventName').addEventListener('keypress', e => { if (e.key === 'Enter') addEvent(); });
+  qs('#newEventName').addEventListener('keypress', e=>{ if(e.key==='Enter') addEvent(); });
 
-  qs('#goToEventsBtn').addEventListener('click', () => {
-    if (!state.players.length || !state.events.length) {
-      showToast('Lisää vähintään yksi pelaaja ja yksi tapahtuma', 'error');
+  qs('#goToEventsBtn').addEventListener('click', ()=>{
+    if(!state.players.length||!state.events.length){
+      showToast('Lisää vähintään yksi pelaaja ja yksi tapahtuma','error');
       return;
     }
-    state.started = true;
+    state.started=true;
     ensureTotalsForPlayers();
     updatePlacementPoints();
     syncEventsPlayers();
-
-    qs('#addPlayerBtn').disabled   = true;
-    qs('#newPlayerName').disabled  = true;
-    qs('#addEventBtn').disabled    = true;
-    qs('#newEventName').disabled   = true;
-    qsa('header .topnav button').forEach(b => b.disabled = false);
-
+    qs('#addPlayerBtn').disabled=true;
+    qs('#newPlayerName').disabled=true;
+    qs('#addEventBtn').disabled=true;
+    qs('#newEventName').disabled=true;
+    qsa('header .topnav button').forEach(b=>b.disabled=false);
     renderSettings();
     renderEventsHeader();
     renderEventInputs();
@@ -295,25 +344,25 @@ document.addEventListener('DOMContentLoaded', () => {
     switchView('eventsView');
   });
 
-  // TAPAHTUMAT-NAV
-  qs('#prevEventBtn').addEventListener('click', () => jumpEvent(-1));
-  qs('#nextEventBtn').addEventListener('click', () => jumpEvent(1));
-  qs('#orderSelect').addEventListener('change', () => {
-    currentEvent().order = qs('#orderSelect').value;
+  // TAPAHTUMAT-nappien sidonta
+  qs('#prevEventBtn').addEventListener('click',()=>jumpEvent(-1));
+  qs('#nextEventBtn').addEventListener('click',()=>jumpEvent(1));
+  qs('#orderSelect').addEventListener('change',()=>{
+    currentEvent().order=qs('#orderSelect').value;
     renderEventInputs();
     saveState();
   });
   qs('#saveEventBtn').addEventListener('click', saveCurrentEvent);
 
-  // Focusout-synkronointi
-  qs('#eventInputs').addEventListener('focusout', e => {
-    if (!e.target.matches('input')) return;
-    const ev = currentEvent(), p = e.target.dataset.player, v = e.target.value.trim();
-    if (ev.locks[p]) {
-      e.target.value = ev.results[p] || '';
-      showToast('Kenttä jo lukittu', 'error');
+  // Focusout tallennus
+  qs('#eventInputs').addEventListener('focusout', e=>{
+    if(!e.target.matches('input')) return;
+    const ev=currentEvent(), p=e.target.dataset.player, v=e.target.value.trim();
+    if(ev.locks[p]){
+      e.target.value=ev.results[p]||'';
+      showToast('Kenttä jo lukittu','error');
     } else {
-      ev.results[p] = v;
+      ev.results[p]=v;
       saveState();
     }
     renderEventInputs();
@@ -323,14 +372,15 @@ document.addEventListener('DOMContentLoaded', () => {
   qs('#startTimerBtn').addEventListener('click',   startTimer);
   qs('#stopTimerBtn').addEventListener('click',    stopTimer);
   qs('#resetTimerBtn').addEventListener('click',   resetTimer);
-  qs('#timerEventSelect').addEventListener('change', resetTimer);
-  qs('#timerPlayerSelect').addEventListener('change', resetTimer);
+  qs('#timerEventSelect').addEventListener('change',resetTimer);
+  qs('#timerPlayerSelect').addEventListener('change',resetTimer);
 
+  // UI
   renderSettings();
   renderTotals();
 
-  if (state.started) switchView('eventsView');
-  else               switchView('homeView');
+  if(state.started) switchView('eventsView');
+  else            switchView('homeView');
 });
 
 function switchView(viewId) {
