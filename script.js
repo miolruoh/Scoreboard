@@ -75,8 +75,9 @@ function currentEvent() {
 async function syncWithFirestore(){
   if(!gameName) return;
   try {
-    const snap = await db.collection('games').doc(gameName).get();
-    if(!snap.exists) return;
+    const docRef = doc(db, "games", gameName);
+    const snap = await getDoc(docRef);
+    if(!snap.exists()) return;
     const remote = JSON.stringify(snap.data());
     const local  = localStorage.getItem('pistelaskuri')||'';
     if(remote!==local){
@@ -97,7 +98,7 @@ async function syncWithFirestore(){
 }
 
 // --- Persistointi: localStorage + Firestore ---
-function saveState(){
+async function saveState(){
   const payload={
     players:state.players, totals:state.totals,
     placementPoints:state.placementPoints,
@@ -110,11 +111,12 @@ function saveState(){
   localStorage.setItem('pistelaskuriGameName',gameName);
 
   if(gameName){
-    db.collection('games').doc(gameName).set(payload)
-      .catch(e=>{
-        console.error('save error',e);
-        showToast('Virhe tallennuksessa','error');
-      });
+    try {
+      await setDoc(doc(db, "games", gameName), payload);
+    } catch (e) {
+      console.error("save error", e);
+      showToast("Virhe tallennuksessa", "error");
+    }
   }
 }
 
@@ -138,17 +140,24 @@ async function startNewGame(){
   const name=qs('#gameNameInput').value.trim();
   if(!name){ showToast('Anna pelin nimi','error'); return; }
 
-  // Estä varatut nimet
-  const snap=await db.collection('games').doc(name).get().catch(e=>{ 
-    console.error(e); showToast('Virhe tarkistuksessa','error');
-  });
-  if(snap?.exists){ showToast('Pelin nimi varattu','error'); return; }
-
+  try {
+    const snap = await getDoc(doc(db, "games", name));
+    if (snap.exists()) {
+      showToast("Pelin nimi varattu", "error");
+      return;
+    }
+  } catch (e) {
+    console.error(e);
+    showToast("Virhe tarkistuksessa", "error");
+  }
+  
   // Poista vanha peli Firestonesta
-  if(gameName){
-    await db.collection('games').doc(gameName).delete().catch(e=>{
-      console.warn('delete old game error',e);
-    });
+  if (gameName) {
+    try {
+      await deleteDoc(doc(db, "games", gameName));
+    } catch (e) {
+      console.warn("delete old game error", e);
+    }
   }
 
   // Nollaa localStorage ja tila
@@ -178,10 +187,18 @@ async function loadGame(){
   if(!name){ showToast('Anna pelin nimi','error'); return; }
   gameName=name;
 
-  const snap=await db.collection('games').doc(name).get().catch(e=>{
-    console.error(e); showToast('Virhe latauksessa','error');
-  });
-  if(!snap?.exists){ showToast('Peliä ei löytynyt','error'); return; }
+  let snap;
+  try {
+    snap = await getDoc(doc(db, "games", name));
+  } catch (e) {
+    console.error(e);
+    showToast("Virhe latauksessa", "error");
+  }
+
+  if (!snap?.exists()) {
+    showToast("Peliä ei löytynyt", "error");
+    return;
+  }
 
   // Päivitä localStoragesta
   const data=snap.data();
@@ -212,10 +229,12 @@ async function loadGame(){
 
 // Lopeta peli: poista pilvestä ja localStoragesta
 async function endGame(){
-  if(gameName){
-    await db.collection('games').doc(gameName).delete().catch(e=>{
-      console.warn('delete error',e);
-    });
+  if (gameName) {
+    try {
+      await deleteDoc(doc(db, "games", gameName));
+    } catch (e) {
+      console.warn("delete error", e);
+    }
   }
   localStorage.removeItem('pistelaskuri');
   localStorage.removeItem('pistelaskuriGameName');
