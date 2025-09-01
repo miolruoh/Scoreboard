@@ -11,18 +11,50 @@ const state = {
 
 // --- Persistointi ---
 function saveState() {
-  localStorage.setItem('pistelaskuri', JSON.stringify({
-    players: state.players,
-    totals: state.totals,
-    placementPoints: state.placementPoints,
-    events: state.events,
+  const payload = {
+    players:           state.players,
+    totals:            state.totals,
+    placementPoints:   state.placementPoints,
+    events:            state.events,
     currentEventIndex: state.currentEventIndex,
-    started: state.started
-  }));
+    started:           state.started
+  };
+
+  const raw = JSON.stringify(payload);
+  // 1) Tallennus localStorageen
+  localStorage.setItem('pistelaskuri', raw);
+
+  // 2) Automaattinen “vienti” URL-hashiin base64-muodossa
+  //    => selaimen osoiteriville ilmestyy #<base64(json)>
+  try {
+    const b64 = btoa(raw);
+    window.location.hash = b64;
+  } catch(e) {
+    console.warn('Hash-päivitys epäonnistui:', e);
+  }
 }
 
+// Lisäät loadStateen hash-tuonnin, jos localStorage on tyhjä
 function loadState() {
-  const raw = localStorage.getItem('pistelaskuri');
+  let raw = localStorage.getItem('pistelaskuri');
+
+  // jos ei löytynyt, katsotaan onko hashissa tallennettu
+  if (!raw && window.location.hash.length > 1) {
+    try {
+      const b64  = window.location.hash.slice(1);
+      raw = atob(b64);
+      // validoidaan että on kelvollinen JSON
+      JSON.parse(raw);
+      // laitetaan localStorageen, niin muutkin funktiot löytävät sen
+      localStorage.setItem('pistelaskuri', raw);
+      // Voit myös tyhjentää hashin, jos et halua näyttää sitä osoiterivillä:
+      window.history.replaceState(null,null, window.location.pathname);
+      console.info('Status ladattu hashista');
+    } catch(e) {
+      console.error('Hashista lataus epäonnistui:', e);
+    }
+  }
+
   if (!raw) return;
   try {
     const obj = JSON.parse(raw);
@@ -214,6 +246,30 @@ document.addEventListener('DOMContentLoaded', () => {
     renderTimerSelectors();
     saveState();
     switchView('eventsView');
+  });
+
+  qs('#loadHashBtn').addEventListener('click', () => {
+    // uudelleenladataan tila joko hashista tai localStoragesta
+    loadState();
+    ensureTotalsForPlayers();
+    updatePlacementPoints();
+    syncEventsPlayers();
+  
+    renderSettings();
+    renderTotals();
+  
+    if (state.started) {
+      // jos pelikin on jo käynnissä, avaamme Events-näkymän
+      switchView('eventsView');
+      renderEventsHeader();
+      renderEventInputs();
+      renderTimerSelectors();
+    } else {
+      // muuten jäämme Settings-näkymään
+      switchView('settingsView');
+    }
+  
+    showToast('Peli ladattu', 'success');
   });
 
   // TAPAHTUMAT-NAV
