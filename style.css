@@ -59,9 +59,11 @@ header {
 
 /* Topnavin napit: oletuksena näytetään tekstit, piilotetaan ikonit */
 .topnav button .btn-icon {
+  font-size: 1.5rem;
   display: none;
 }
 .topnav button .btn-text {
+  font-size: 1rem;
   display: inline;
 }
 
@@ -97,9 +99,9 @@ header {
   font-size: .85rem;
 }
 
-main { padding:1rem; max-width:980px; margin:0 auto; }
+main { padding:0.5rem 1rem 1rem 1rem; max-width:980px; margin:0 auto; }
 
-h1{ font-size: clamp(0.75rem, 6vw, 1.5rem); width: 100%;}
+h1{ font-size: clamp(0.75rem, 6vw, 1.5rem); width: 100%; margin:0 0 1rem; }
 h2{ margin:0 0 .5rem; font-size:1.125rem; }
 
 .panel {
@@ -243,9 +245,9 @@ input[readonly] {
 }
 .confirmBox p { margin-bottom:1rem; }
 
-@media(max-width:600px){
+@media(max-width:700px){
   .view { 
-    margin:1rem auto;
+    margin:0.5rem auto;
   }
   .topnav {
     gap:0.5rem; padding:.5rem; flex-wrap:wrap;
@@ -259,6 +261,9 @@ input[readonly] {
   .topnav button {
     padding:.25rem;
     min-width:20px;
+  }
+  #confirmNo{
+    min-width: 60px !important;
   }
 }
 

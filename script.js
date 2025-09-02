@@ -113,7 +113,16 @@ async function syncWithFirestore(){
   try {
     const docRef = doc(db, "games", gameName);
     const snap = await getDoc(docRef);
-    if(!snap.exists()) return;
+
+    if(!snap.exists()) {
+      // 🔹 Peli poistettu Firestoresta → poista myös tältä laitteelta
+      localStorage.removeItem('pistelaskuri');
+      localStorage.removeItem('pistelaskuriGameName');
+      gameName = '';
+      resetAll(); // tämä vie etusivulle ja nollaa tilan
+      showToast('Peli on poistettu', 'error');
+      return;
+    }
     const remote = JSON.stringify(snap.data());
     const local  = localStorage.getItem('pistelaskuri')||'';
     if(remote!==local){
@@ -255,6 +264,7 @@ async function loadGame(){
   });
 
   // Renderöinnit ja näkymään siirtyminen
+  renderSettings();
   renderEventsHeader();
   renderEventInputs();
   renderTimerSelectors();
@@ -507,6 +517,12 @@ function deleteEvent(i) {
 }
 
 function renderSettings(){
+  // Lukitse lisäyspainikkeet jos peli on aloitettu
+  qs('#addPlayerBtn').disabled  = state.started;
+  qs('#newPlayerName').disabled = state.started;
+  qs('#addEventBtn').disabled   = state.started;
+  qs('#newEventName').disabled  = state.started;
+
   const disableEdit = state.started;
   const disableOpen = !state.started;
 
