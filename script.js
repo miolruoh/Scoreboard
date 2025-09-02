@@ -125,7 +125,7 @@ async function syncWithFirestore(){
       localStorage.removeItem('pistelaskuriGameName');
       gameName = '';
       resetAll(); // tämä vie etusivulle ja nollaa tilan
-      showToast('Peli on poistettu', 'error');
+      showToast('Kilpailu on poistettu', 'error');
       return;
     }
     const remote = JSON.stringify(snap.data());
@@ -754,34 +754,33 @@ function renderTotals(){
   const sorted = Object.entries(state.totals).sort((a,b)=>b[1]-a[1]);
 
   const colors = ['gold', 'silver', 'bronze'];
-  let currentColorIndex = 0;
   let lastPoints = null;
-  let rank = 0;
+  let currentRank = 1;
+  let colorIndex = 0;
 
-  sorted.forEach(([p, pts], idx) => {
+  for (let i = 0; i < sorted.length; i++) {
+    const [player, pts] = sorted[i];
     const tr = document.createElement('tr');
-    if (allDone && currentColorIndex < colors.length) {
-      if (lastPoints === null) {
-        // ensimmäinen pelaaja
-        tr.classList.add(colors[currentColorIndex]);
-        lastPoints = pts;
-        rank++;
-      } else if (pts === lastPoints) {
-        // sama pistemäärä kuin edellisellä → sama väri
-        tr.classList.add(colors[currentColorIndex]);
-      } else {
-        // uusi pistemäärä → siirry seuraavaan väriin
-        currentColorIndex = rank; // rank kertoo monesko sija
-        if (currentColorIndex < colors.length) {
-          tr.classList.add(colors[currentColorIndex]);
+
+    if (allDone && colorIndex < colors.length) {
+      if (lastPoints === null || pts !== lastPoints) {
+        currentRank = i + 1;
+        if (currentRank <= 3) {
+          tr.classList.add(colors[colorIndex]);
+          colorIndex++;
         }
-        lastPoints = pts;
-        rank++;
+      } else {
+        // sama pistemäärä kuin edellisellä → sama väri
+        if (currentRank <= 3) {
+          tr.classList.add(colors[colorIndex - 1]);
+        }
       }
+      lastPoints = pts;
     }
-      tr.innerHTML = `<td>${p}</td><td>${pts}</td>`;
-      tb.append(tr);
-    });
+
+    tr.innerHTML = `<td>${player}</td><td>${pts}</td>`;
+    tb.append(tr);
+  }
 }
 
 // --- Sekuntikello ---
