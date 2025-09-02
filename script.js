@@ -62,8 +62,13 @@ function showToast(msg, type='') {
   setTimeout(() => t.hidden = true, 2200);
 }
 
-function isTimeFormat(v) { return /^\d{1,2}\.\d{2}\.\d{1,3}$/.test(v.trim()); }
-function isIntegerStr(v) { return /^-?\d+$/.test(v.trim()); }
+function isTimeFormat(v) {
+  return /^\d{1,2}\.\d{2}\.\d{2,3}$/.test(v.trim());
+}
+function isNumberStr(v) {
+  // Hyväksyy kokonaisluvut ja desimaalit, joissa max 2 desimaalia
+  return /^-?\d+(\.\d{1,2})?$/.test(v.trim());
+}
 function timeToMs(str) {
   const [m,s,ms] = str.split('.').map(x=>parseInt(x,10));
   return (m||0)*60000 + (s||0)*1000 + (ms||0);
@@ -183,12 +188,12 @@ function loadState(){
 
 async function startNewGame(){
   const name=qs('#gameNameInput').value.trim();
-  if(!name){ showToast('Anna pelin nimi','error'); return; }
+  if(!name){ showToast('Anna kilpailun nimi','error'); return; }
 
   try {
     const snap = await getDoc(doc(db, "games", name));
     if (snap.exists()) {
-      showToast("Pelin nimi varattu", "error");
+      showToast("Kilpailun nimi varattu", "error");
       return;
     }
   } catch (e) {
@@ -224,12 +229,12 @@ async function startNewGame(){
   renderSettings();
   renderTotals();
   switchView('settingsView');
-  showToast('Uusi peli aloitettu','success');
+  showToast('Uusi kilpailu aloitettu','success');
 }
 
 async function loadGame(){
   const name=qs('#gameNameInput').value.trim();
-  if(!name){ showToast('Anna pelin nimi','error'); return; }
+  if(!name){ showToast('Anna kilpailun nimi','error'); return; }
   gameName=name;
 
   let snap;
@@ -241,7 +246,7 @@ async function loadGame(){
   }
 
   if (!snap?.exists()) {
-    showToast("Peliä ei löytynyt", "error");
+    showToast("Kilpailua ei löytynyt", "error");
     return;
   }
 
@@ -270,7 +275,7 @@ async function loadGame(){
   renderTimerSelectors();
   renderTotals();
   switchView('eventsView');
-  showToast('Peli ladattu','success');
+  showToast('Kilpailu ladattu','success');
 }
 
 // Lopeta peli: poista pilvestä ja localStoragesta
@@ -389,7 +394,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
 
   qs('#goToEventsBtn').addEventListener('click', ()=>{
     if(!state.players.length||!state.events.length){
-      showToast('Lisää vähintään yksi pelaaja ja yksi tapahtuma','error');
+      showToast('Lisää vähintään yksi kilpailija ja yksi laji','error');
       return;
     }
     state.started=true;
@@ -459,7 +464,7 @@ function addPlayer() {
   const val = qs('#newPlayerName').value.trim();
   if (!val) return;
   if (state.players.includes(val)) {
-    showToast('Pelaaja jo olemassa','error');
+    showToast('Kilpailija jo olemassa','error');
     return;
   }
   state.players.push(val);
@@ -483,7 +488,7 @@ function removePlayer(name) {
 }
 
 function addEvent() {
-  const val = qs('#newEventName').value.trim() || `Tapahtuma ${state.events.length+1}`;
+  const val = qs('#newEventName').value.trim() || `Laji ${state.events.length+1}`;
   state.events.push({
     name: val,
     results: Object.fromEntries(state.players.map(p=>[p,''])),
@@ -498,7 +503,7 @@ function addEvent() {
 }
 
 function renameEvent(i) {
-  const old = state.events[i]?.name || `Tapahtuma ${i+1}`;
+  const old = state.events[i]?.name || `Laji ${i+1}`;
   const nu  = prompt('Uusi nimi:', old);
   if (nu) {
     state.events[i].name = nu.trim();
@@ -585,7 +590,7 @@ function renderEventsHeader(){
   const ev        = currentEvent();
 
   if (!state.events.length){
-    title.textContent = 'Ei tapahtumia';
+    title.textContent = 'Ei Lajeja';
     prevBtn.disabled  = true;
     nextBtn.disabled  = true;
     saveBtn.disabled  = true;
@@ -617,7 +622,7 @@ function renderEventInputs(){
   c.innerHTML = '';
   const ev = currentEvent();
   if (!ev) {
-    c.innerHTML = '<p class="hint">Lisää tapahtumia.</p>';
+    c.innerHTML = '<p class="hint">Lisää lajeja.</p>';
     return;
   }
 
@@ -646,7 +651,7 @@ function renderEventInputs(){
     inp.type        = 'text';
     inp.id          = rid;
     inp.name        = rid;
-    inp.placeholder = 'mm.ss.mmm tai luku';
+    inp.placeholder = 'mm.ss.mm(m) tai luku (max 2 des)';
     inp.value       = ev.results[p] || '';
     inp.readOnly    = !!ev.locks[p];
     inp.dataset.player = p;
@@ -673,7 +678,7 @@ function renderEventInputs(){
 function saveCurrentEvent(){
   const ev = currentEvent();
   if (!ev || ev.committed) {
-    if (ev?.committed) showToast('Tapahtuma on jo tallennettu','error');
+    if (ev?.committed) showToast('Laji on jo tallennettu','error');
     return;
   }
 
@@ -683,7 +688,12 @@ function saveCurrentEvent(){
     return;
   }
 
-  const types = vals.map(v=>isTimeFormat(v)?'time':isIntegerStr(v)?'int':'invalid');
+  const types = vals.map(v =>
+    isTimeFormat(v) ? 'time' :
+    isNumberStr(v)  ? 'number' :
+    'invalid'
+  );
+  
   if (types.includes('invalid')) {
     showToast('Muoto väärä','error');
     return;
@@ -729,6 +739,14 @@ function saveCurrentEvent(){
 }
 
 function renderTotals(){
+  // Laske suoritettujen tapahtumien määrä
+  const completedCount = state.events.filter(e => e.committed).length;
+  const totalCount = state.events.length;
+
+  // Päivitä otsikko
+  const titleEl = qs('#totalsView h1');
+  titleEl.textContent = `Kokonaispisteet (${completedCount}/${totalCount})`;
+
   const tb = qs('#leaderboardBodyTotals');
   tb.innerHTML = '';
   ensureTotalsForPlayers();
@@ -736,34 +754,34 @@ function renderTotals(){
   const sorted = Object.entries(state.totals).sort((a,b)=>b[1]-a[1]);
 
   const colors = ['gold', 'silver', 'bronze'];
-let currentColorIndex = 0;
-let lastPoints = null;
-let rank = 0;
+  let currentColorIndex = 0;
+  let lastPoints = null;
+  let rank = 0;
 
-sorted.forEach(([p, pts], idx) => {
-  const tr = document.createElement('tr');
-  if (allDone && currentColorIndex < colors.length) {
-    if (lastPoints === null) {
-      // ensimmäinen pelaaja
-      tr.classList.add(colors[currentColorIndex]);
-      lastPoints = pts;
-      rank++;
-    } else if (pts === lastPoints) {
-      // sama pistemäärä kuin edellisellä → sama väri
-      tr.classList.add(colors[currentColorIndex]);
-    } else {
-      // uusi pistemäärä → siirry seuraavaan väriin
-      currentColorIndex = rank; // rank kertoo monesko sija
-      if (currentColorIndex < colors.length) {
+  sorted.forEach(([p, pts], idx) => {
+    const tr = document.createElement('tr');
+    if (allDone && currentColorIndex < colors.length) {
+      if (lastPoints === null) {
+        // ensimmäinen pelaaja
         tr.classList.add(colors[currentColorIndex]);
+        lastPoints = pts;
+        rank++;
+      } else if (pts === lastPoints) {
+        // sama pistemäärä kuin edellisellä → sama väri
+        tr.classList.add(colors[currentColorIndex]);
+      } else {
+        // uusi pistemäärä → siirry seuraavaan väriin
+        currentColorIndex = rank; // rank kertoo monesko sija
+        if (currentColorIndex < colors.length) {
+          tr.classList.add(colors[currentColorIndex]);
+        }
+        lastPoints = pts;
+        rank++;
       }
-      lastPoints = pts;
-      rank++;
     }
-  }
-    tr.innerHTML = `<td>${p}</td><td>${pts}</td>`;
-    tb.append(tr);
-  });
+      tr.innerHTML = `<td>${p}</td><td>${pts}</td>`;
+      tb.append(tr);
+    });
 }
 
 // --- Sekuntikello ---
@@ -824,11 +842,11 @@ function stopTimer(){
   const eIdx = parseInt(qs('#timerEventSelect').value, 10),
         pl   = qs('#timerPlayerSelect').value;
   if (isNaN(eIdx) || !state.events[eIdx]) {
-    qs('#timerNotice').textContent = 'Valitse tapahtuma';
+    qs('#timerNotice').textContent = 'Valitse laji';
     return;
   }
   if (!pl) {
-    qs('#timerNotice').textContent = 'Valitse pelaaja';
+    qs('#timerNotice').textContent = 'Valitse kilpailija';
     return;
   }
 

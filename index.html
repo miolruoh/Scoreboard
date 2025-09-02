@@ -13,11 +13,12 @@
   <section id="homeView" class="view">
     <div class="intro">
       <h1>Pistelaskuri</h1>
-      <p>Anna pelin nimi:</p>
-      <input type="text" id="gameNameInput" placeholder="Pelin nimi" />
+      <p>Anna kilpailun nimi:</p>
+      <input type="text" id="gameNameInput" placeholder="Kilpailun nimi" />
 
-      <button id="homeNewBtn"  class="primary">Aloita uusi peli</button>
-      <button id="homeLoadBtn" class="ghost">Lataa peli</button>
+      <button id="homeNewBtn"  class="primary">Aloita uusi kilpailu</button>
+      <button id="homeLoadBtn" class="ghost">Lataa kilpailu</button>
+      <p class="hint">Jos haluat ladata jo olemassa olevan kilpailun, syötä kilpailun nimi ja paina "Lataa kilpailu" painiketta</p>
     </div>
   </section>
 
@@ -29,8 +30,8 @@
         <span class="btn-text">Asetukset</span>
       </button>
       <button data-view="eventsView" class="primary" disabled>
-        <span class="btn-icon">📅</span>
-        <span class="btn-text">Tapahtumat</span>
+        <span class="btn-icon">🎯</span>
+        <span class="btn-text">Lajit</span>
       </button>
       <button data-view="timerView" class="primary" disabled>
         <span class="btn-icon">⏱️</span>
@@ -42,7 +43,7 @@
       </button>
       <button id="endGameBtn" class="danger small">
         <span class="btn-icon">❌</span>
-        <span class="btn-text">Lopeta peli</span>
+        <span class="btn-text">Lopeta kilpailu</span>
       </button>
     </nav>
   </header>
@@ -53,19 +54,19 @@
       <h1>Asetukset</h1>
 
       <div class="panel">
-        <h2>Pelaajat</h2>
+        <h2>Kilpailijat</h2>
         <div id="playersList" class="list"></div>
         <div class="row">
-          <input type="text" id="newPlayerName" placeholder="Uusi pelaaja" />
+          <input type="text" id="newPlayerName" placeholder="Uusi kilpailija" />
           <button id="addPlayerBtn" class="ghost">Lisää</button>
         </div>
       </div>
 
       <div class="panel">
-        <h2>Tapahtumat</h2>
+        <h2>Lajit</h2>
         <div id="eventNamesList" class="list"></div>
         <div class="row">
-          <input type="text" id="newEventName" placeholder="Uusi tapahtuma" />
+          <input type="text" id="newEventName" placeholder="Uusi laji" />
           <button id="addEventBtn" class="ghost">Lisää</button>
         </div>
       </div>
@@ -78,7 +79,7 @@
     <!-- TAPAHTUMAT -->
     <section id="eventsView" class="view" hidden>
       <div class="events-header">
-        <h1 id="eventTitle">Tapahtuma</h1>
+        <h1 id="eventTitle">Laji</h1>
         <div class="event-nav">
           <button id="prevEventBtn" class="ghost">← Edellinen</button>
           <button id="nextEventBtn" class="ghost">Seuraava →</button>
@@ -114,11 +115,11 @@
           <button id="resetTimerBtn" class="ghost">Reset</button>
         </div>
         <div class="row">
-          <label for="timerEventSelect"><strong>Tapahtuma:</strong></label>
+          <label for="timerEventSelect"><strong>Laji:</strong></label>
           <select id="timerEventSelect"></select>
         </div>
         <div class="row">
-          <label for="timerPlayerSelect"><strong>Pelaaja:</strong></label>
+          <label for="timerPlayerSelect"><strong>Kilpailija:</strong></label>
           <select id="timerPlayerSelect"></select>
         </div>
         <div id="timerNotice" class="status"></div>
@@ -130,7 +131,7 @@
       <h1>Kokonaispisteet</h1>
       <table class="table">
         <thead>
-          <tr><th>Pelaaja</th><th>Pisteet</th></tr>
+          <tr><th>Kilpailija</th><th>Pisteet</th></tr>
         </thead>
         <tbody id="leaderboardBodyTotals"></tbody>
       </table>
@@ -143,7 +144,7 @@
   <!-- Lopeta peli -kysely -->
   <div id="confirmOverlay" hidden>
     <div class="confirmBox">
-      <p>Oletko varma, että haluat lopettaa pelin?</p>
+      <p>Oletko varma, että haluat lopettaa kilpailun?</p>
       <div class="row">
         <button id="confirmYes" class="danger">Kyllä</button>
         <button id="confirmNo"  class="ghost">Ei</button>
