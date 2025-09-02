@@ -590,8 +590,8 @@ function renderEventInputs(){
     if(!ha&&!hb) return 0;
     if(!ha) return 1;
     if(!hb) return -1;
-    const va = isTimeFormat(ra)?timeToMs(ra):parseInt(ra,10);
-    const vb = isTimeFormat(rb)?timeToMs(rb):parseInt(rb,10);
+    const va = isTimeFormat(ra)?timeToMs(ra):parseFloat(ra,10);
+    const vb = isTimeFormat(rb)?timeToMs(rb):parseFloat(rb,10);
     return ev.order==='asc'?va-vb:vb-va;
   });
 
@@ -660,14 +660,28 @@ function saveCurrentEvent(){
   const dir    = ev.order === 'asc' ? 1 : -1;
   const rows   = state.players.map(p=>({
     p,
-    score: isTime? timeToMs(ev.results[p]): parseInt(ev.results[p],10)
+    score: isTime? timeToMs(ev.results[p]): parseFloat(ev.results[p],10)
   })).sort((a,b)=>(a.score - b.score)*dir);
 
   updatePlacementPoints();
-  rows.forEach((r,i)=>{
-    ev.points[r.p]     = state.placementPoints[i];
-    state.totals[r.p] += state.placementPoints[i];
-  });
+  let i = 0;
+  while (i < rows.length) {
+    let j = i + 1;
+    while (j < rows.length && rows[j].score === rows[i].score) {
+      j++;
+    }
+    // sijoitukset i...j-1 ovat tasoissa
+    const totalPoints = state.placementPoints
+      .slice(i, j)
+      .reduce((sum, p) => sum + p, 0);
+    const avgPoints = totalPoints / (j - i);
+
+    for (let k = i; k < j; k++) {
+      ev.points[rows[k].p] = avgPoints;
+      state.totals[rows[k].p] = (state.totals[rows[k].p] || 0) + avgPoints;
+    }
+    i = j;
+  }
   ev.committed = true;
 
   renderEventsHeader();
@@ -684,13 +698,32 @@ function renderTotals(){
   const allDone = state.events.length > 0 && state.events.every(e=>e.committed);
   const sorted = Object.entries(state.totals).sort((a,b)=>b[1]-a[1]);
 
-  sorted.forEach(([p,pts], i)=>{
-    const tr = document.createElement('tr');
-    if (allDone) {
-      if (i===0) tr.classList.add('gold');
-      else if (i===1) tr.classList.add('silver');
-      else if (i===2) tr.classList.add('bronze');
+  const colors = ['gold', 'silver', 'bronze'];
+let currentColorIndex = 0;
+let lastPoints = null;
+let rank = 0;
+
+sorted.forEach(([p, pts], idx) => {
+  const tr = document.createElement('tr');
+  if (allDone && currentColorIndex < colors.length) {
+    if (lastPoints === null) {
+      // ensimmäinen pelaaja
+      tr.classList.add(colors[currentColorIndex]);
+      lastPoints = pts;
+      rank++;
+    } else if (pts === lastPoints) {
+      // sama pistemäärä kuin edellisellä → sama väri
+      tr.classList.add(colors[currentColorIndex]);
+    } else {
+      // uusi pistemäärä → siirry seuraavaan väriin
+      currentColorIndex = rank; // rank kertoo monesko sija
+      if (currentColorIndex < colors.length) {
+        tr.classList.add(colors[currentColorIndex]);
+      }
+      lastPoints = pts;
+      rank++;
     }
+  }
     tr.innerHTML = `<td>${p}</td><td>${pts}</td>`;
     tb.append(tr);
   });
@@ -700,13 +733,37 @@ function renderTotals(){
 function renderTimerSelectors(){
   const evSel = qs('#timerEventSelect'),
         plSel = qs('#timerPlayerSelect');
+
   evSel.innerHTML = '';
   state.events.forEach((ev,i)=> evSel.append(new Option(ev.name,i)));
-  evSel.value = state.currentEventIndex;
 
   plSel.innerHTML = '';
   state.players.forEach(p => plSel.append(new Option(p,p)));
+
+  // 🔹 Palauta tallennetut valinnat
+  const savedEventIndex = localStorage.getItem('timerSelectedEvent');
+  const savedPlayer = localStorage.getItem('timerSelectedPlayer');
+
+  if (savedEventIndex !== null && state.events[savedEventIndex]) {
+    evSel.value = savedEventIndex;
+  } else {
+    evSel.value = state.currentEventIndex;
+  }
+
+  if (savedPlayer && state.players.includes(savedPlayer)) {
+    plSel.value = savedPlayer;
+  }
 }
+
+qs('#timerEventSelect').addEventListener('change', e => {
+  localStorage.setItem('timerSelectedEvent', e.target.value);
+  resetTimer();
+});
+
+qs('#timerPlayerSelect').addEventListener('change', e => {
+  localStorage.setItem('timerSelectedPlayer', e.target.value);
+  resetTimer();
+});
 
 function updateTimerDisplay(){
   qs('#timerDisplay').textContent = msToDisplay(state.timer.elapsedMs);
