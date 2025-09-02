@@ -1,15 +1,36 @@
 // Import the functions you need from the SDKs you need
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
 import { getFirestore, doc, getDoc, setDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-firestore.js";
+import { initializeAppCheck, ReCaptchaV3Provider } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app-check.js";
 // Your web app's Firebase configuration
 // For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
   apiKey: "AIzaSyDpntEY5iTfSU10pxXBvgjbjNRDFI3ZUlM",
   authDomain: "sturdy-dragon-470812-d0.firebaseapp.com",
   projectId: "sturdy-dragon-470812-d0",
+  storageBucket: "sturdy-dragon-470812-d0.firebasestorage.app",
+  messagingSenderId: "394864264450",
+  appId: "1:394864264450:web:33f8f6293b998b18b7ae1b"
 };
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
+
+// You get this key when you register your site for reCAPTCHA v3 in the reCAPTCHA admin console.
+const reCaptchaV3SiteKey = '6LfqWrsrAAAAAFThhOcgP_nA6_jBdCVyA-oBVT50';
+// Initialize App Check
+if (typeof self !== 'undefined' && self.hasOwnProperty('grecaptcha')) {
+  // Pass your Firebase app instance and your reCAPTCHA v3 site key to initialize App Check.
+  initializeAppCheck(app, {
+    provider: new ReCaptchaV3Provider(reCaptchaV3SiteKey),
+    isTokenAutoRefreshEnabled: true
+  });
+} else {
+  // Fallback for environments where 'grecaptcha' might not be available
+  console.warn("reCAPTCHA v3 script not loaded. App Check may not function correctly.");
+  // Consider initializing with a debug provider for local development if needed:
+  // initializeAppCheck(app, { provider: new AppCheckDebugProvider(), isTokenAutoRefreshEnabled: true });
+}
+console.log("Firebase App Check initialized with reCAPTCHA v3 provider.");
 const db = getFirestore(app);
 
 
